@@ -16,30 +16,39 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'post_id 和 message 是必填字段' });
   }
 
-  // 正则提取编号、名称、价格
-  const regex = /(B\s*\d{1,4})[\s\-_/]*([\u4e00-\u9fa5A-Za-z\d\s]{1,30})[^\d]*(?:RM|rm)?\s*([\d.,]+)/;
+  // 标号与价格提取：如 B127 小红帽 RM1800.00、b127-寿娘子rm 380 等
+  const regex = /([Bb]\s*0*\d{1,3})[^\dRMrm]{1,10}(?:RM|rm)?\s*(\d{1,5}(?:\.\d{1,2})?)/;
   const match = message.match(regex);
 
   if (!match) {
     return res.status(400).json({ error: '留言格式无法解析', raw: message });
   }
 
+  const raw_id = match[1].toUpperCase().replace(/\s+/g, '');
+  const numberPart = raw_id.replace(/[^0-9]/g, '').padStart(3, '0');
+  const selling_id = 'B' + numberPart;
+
+  const product_name = message
+    .replace(match[1], '')
+    .replace(match[2], '')
+    .replace(/[^\u4e00-\u9fa5A-Za-z0-9\s]/g, '') // 删除符号
+    .replace(/\s+/g, '') // 删除空白
+    .replace(/RM|rm/gi, '') // 删除RM文字
+    .trim();
+
+  const price_raw = parseFloat(match[2]).toFixed(2);
+  const price_fmt = parseFloat(price_raw).toLocaleString('en-MY', {
+    style: 'decimal',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
   try {
-    // 编号处理为三位数
-    const raw_id = match[1].toUpperCase().replace(/\s+/g, '').replace('B', '');
-    const selling_id = 'B' + raw_id.padStart(3, '0');
-
-    const product_name = match[2].trim().replace(/^[^\w\u4e00-\u9fa5]+/, '');
-
-    const raw_price = match[3].replace(/[^\d.]/g, '');
-    const price = parseFloat(raw_price);
-    const price_fmt = price.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    const { error } = await supabase.from(process.env.SUPABASE_TABLE_NAME).insert({
+    const { error } = await supabase.from('live_products').insert({
       selling_id,
       post_id,
       product_name,
-      price_raw: price.toFixed(2),
+      price_raw,
       price_fmt
     });
 
@@ -47,8 +56,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: error.message });
     }
 
-    return res.json({ success: true, product: { selling_id, product_name, price_raw: price.toFixed(2), price_fmt } });
-  } catch (e) {
-    return res.status(500).json({ error: '处理失败', detail: e.message });
+    return res.json({
+      success: true,
+      product: {
+        selling_id,
+        product_name,
+        price_raw,
+        price_fmt
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 }
