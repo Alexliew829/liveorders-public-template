@@ -1,62 +1,45 @@
 // pages/api/startOrderListener.js
 
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_TABLE_NAME = process.env.SUPABASE_TABLE_NAME || 'live_products';
+const PAGE_ID = process.env.PAGE_ID;
+const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 export default async function handler(req, res) {
-  const makeWebhookUrl = process.env.MAKE_WEBHOOK_URL;
-  const pageId = process.env.PAGE_ID;
-  const accessToken = process.env.FB_ACCESS_TOKEN;
-
-  // 马来西亚时间：UTC+8
-  const now = new Date();
-  const hour = now.getUTCHours() + 8;
-  const adjustedHour = hour >= 24 ? hour - 24 : hour;
-
-  if (!(adjustedHour >= 20 || adjustedHour < 2)) {
-    return res.status(403).json({
-      success: false,
-      message: "⛔ 当前不在监听时段（每天20:00~02:00）"
-    });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Only POST requests allowed' });
   }
 
-  try {
-    const fbResponse = await fetch(
-      `https://graph.facebook.com/v19.0/${pageId}/posts?limit=1&access_token=${accessToken}`
-    );
-    const fbData = await fbResponse.json();
-    const latestPostId = fbData?.data?.[0]?.id;
+  const { post_id, message } = req.body;
 
-    if (!latestPostId) {
-      return res.status(500).json({
-        success: false,
-        message: "❌ 无法取得最新贴文 ID"
-      });
-    }
-
-    const makeResponse = await fetch(makeWebhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        post_id: latestPostId,
-        trigger: "start_order",
-        time: new Date().toISOString()
-      })
-    });
-
-    if (!makeResponse.ok) {
-      return res.status(500).json({
-        success: false,
-        message: "❌ Make Webhook 执行失败"
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: `✅ 已触发自动下单监听，Post ID: ${latestPostId}`
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "❌ 系统错误",
-      error: error.message
-    });
+  if (typeof post_id !== 'string' || typeof message !== 'string') {
+    return res.status(400).json({ error: 'post_id 和 message 是必填字段' });
   }
+
+  const match = message.match(/\b[Bb]\s*0*(\d{1,3})[\s\-_:]*([\u4e00-\u9fa5A-Za-z0-9]+)[\s\-_:]*RM\s*([\d,.]+)/);
+
+  if (!match) {
+    return res.status(400).json({ error: 'message 格式不合规定' });
+  }
+
+  const [, numberRaw, product_name, priceRaw] = match;
+  const selling_id = 'B' + numberRaw.padStart(3, '0');
+
+  const price_raw = parseFloat(priceRaw.replace(/,/g, ''));
+  const price_fmt = price_raw.toFixed(2);
+
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE_NAME)
+    .insert([{ post_id, selling_id, product_name, price_raw: price_fmt, price_fmt }]);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.status(200).json({ success: true, product: { selling_id, product_name, price_raw: price_fmt, price_fmt } });
 }
