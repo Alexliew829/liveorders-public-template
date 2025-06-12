@@ -1,5 +1,3 @@
-// pages/api/addProduct.js
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -10,7 +8,9 @@ const supabase = createClient(
 function extractProductInfo(message) {
   const idMatch = message.match(/\b[bB]\s*0*(\d{1,3})\b/);
   if (!idMatch) return null;
-  const sellingId = `B${idMatch[1]}`.padStart(3, '0');
+
+  // ✅ 修正标号统一为 B+三位数，例如 B001、B088
+  const sellingId = 'B' + idMatch[1].padStart(3, '0');
 
   const priceMatch = message.match(/(?:RM|rm|Rm|rM)[\s\-~_]*([\d,\.]+)/);
   const rawPrice = priceMatch?.[1]?.replace(/,/g, '') || '';
