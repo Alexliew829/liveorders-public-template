@@ -16,33 +16,36 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'post_id 和 message 是必填字段' });
   }
 
-  // 提取商品编号、价格
-  const regex = /[Bb]\s*0*(\d+)[^\da-zA-Z]*([\u4e00-\u9fa5\w\s\-·~_]+)[^\d]*(?:RM|rm)?\s*([\d.,]+)/;
+  // 解析留言格式（如 B01 寿娘子 RM380.00 或 b128～寿娘子rm380）
+  const regex = /[Bb]\s*0*(\d+)[\s\S]*?(?:RM|rm)?\s*([\d,.]+)/;
   const match = message.match(regex);
 
   if (!match) {
-    return res.status(400).json({ error: '留言格式不正确，无法识别商品信息' });
+    return res.status(400).json({ error: '留言格式不符合要求' });
   }
 
-  const selling_id = 'B' + match[1];
-  const raw_product_name = match[2] || '';
- const product_name = match[0].replace(/^[^\u4e00-\u9fa5a-zA-Z0-9]+/, ''); // 去除前缀的非字母数字中文字
-  const price_raw = parseFloat(match[3].replace(/,/g, '')) || 0;
-  const price_fmt = price_raw.toFixed(2);
+  const rawId = match[1];
+  const rawPrice = match[2];
 
-  const { error, data } = await supabase.from(process.env.SUPABASE_TABLE_NAME).insert([
-    {
-      post_id,
-      selling_id,
-      product_name,
-      price_raw,
-      price_fmt,
-    }
-  ]);
+  const selling_id = `B${rawId.padStart(3, '0')}`;
+  const price_raw = parseFloat(rawPrice.replace(/,/g, '')).toFixed(2);
+  const price_fmt = parseFloat(price_raw).toLocaleString('en-MY', {
+    style: 'decimal',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  // 商品名称（去除开头符号）
+  const product_name = match[0].replace(/^[^\p{L}\p{N}]+/u, '').replace(/[Bb]\s*0*\d+/, '').replace(/(?:RM|rm)?\s*[\d,.]+/, '').trim();
+
+  // 写入数据库
+  const { data, error } = await supabase
+    .from(process.env.SUPABASE_TABLE_NAME)
+    .insert([{ post_id, selling_id, product_name, price_raw, price_fmt }]);
 
   if (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 
-  return res.status(200).json({ success: true, product: { selling_id, product_name, price_raw: price_fmt, post_id } });
+  return res.status(200).json({ success: true, product: { selling_id, product_name, price_raw, price_fmt } });
 }
