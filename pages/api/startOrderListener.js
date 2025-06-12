@@ -1,40 +1,62 @@
 // pages/api/startOrderListener.js
 
 export default async function handler(req, res) {
+  const makeWebhookUrl = process.env.MAKE_WEBHOOK_URL;
   const pageId = process.env.PAGE_ID;
   const accessToken = process.env.FB_ACCESS_TOKEN;
-  const makeWebhookUrl = process.env.MAKE_ORDER_WEBHOOK_URL; // 👈 你等下设置这个
+
+  // 马来西亚时间：UTC+8
+  const now = new Date();
+  const hour = now.getUTCHours() + 8;
+  const adjustedHour = hour >= 24 ? hour - 24 : hour;
+
+  if (!(adjustedHour >= 20 || adjustedHour < 2)) {
+    return res.status(403).json({
+      success: false,
+      message: "⛔ 当前不在监听时段（每天20:00~02:00）"
+    });
+  }
 
   try {
-    // 抓取最新贴文 ID
-    const fbRes = await fetch(`https://graph.facebook.com/${pageId}/posts?access_token=${accessToken}&limit=1`);
-    const fbData = await fbRes.json();
+    const fbResponse = await fetch(
+      `https://graph.facebook.com/v19.0/${pageId}/posts?limit=1&access_token=${accessToken}`
+    );
+    const fbData = await fbResponse.json();
     const latestPostId = fbData?.data?.[0]?.id;
 
     if (!latestPostId) {
-      return res.status(500).json({ error: "无法取得最新贴文 ID" });
+      return res.status(500).json({
+        success: false,
+        message: "❌ 无法取得最新贴文 ID"
+      });
     }
 
-    // 通知 Make Webhook 启动监听
-    const makeRes = await fetch(makeWebhookUrl, {
+    const makeResponse = await fetch(makeWebhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         post_id: latestPostId,
-        trigger: "start_order_listener",
+        trigger: "start_order",
         time: new Date().toISOString()
       })
     });
 
-    if (!makeRes.ok) {
-      return res.status(500).json({ error: "无法触发 Make Webhook" });
+    if (!makeResponse.ok) {
+      return res.status(500).json({
+        success: false,
+        message: "❌ Make Webhook 执行失败"
+      });
     }
 
     return res.status(200).json({
-      message: "✅ 已启动下单监听流程",
-      post_id: latestPostId
+      success: true,
+      message: `✅ 已触发自动下单监听，Post ID: ${latestPostId}`
     });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "❌ 系统错误",
+      error: error.message
+    });
   }
 }
