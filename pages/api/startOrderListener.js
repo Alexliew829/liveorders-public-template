@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
   const selling_id = 'B' + match[1];
   const raw_product_name = match[2] || '';
-  const product_name = raw_product_name.replace(/^[-~_\s]+/, '').trim();
+ const product_name = match[0].replace(/^[^\u4e00-\u9fa5a-zA-Z0-9]+/, ''); // 去除前缀的非字母数字中文字
   const price_raw = parseFloat(match[3].replace(/,/g, '')) || 0;
   const price_fmt = price_raw.toFixed(2);
 
