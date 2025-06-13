@@ -39,16 +39,20 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from } = comment;
-      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
+      if (!message || from?.id !== PAGE_ID) continue;
 
-      const regex = /[Bb]\s*0*(\d{1,3})[\s\-_/～]*([\u4e00-\u9fa5]{1,8})\s*(?:RM|rm)?\s*([\d,.]+)/;
+      // ✅ 改良版 regex：只排除 rm 和数字作为价格
+      const regex = /[Bb]\s*0*(\d{1,3})[\s\-_/～]*([^\dRMrm]{1,20})\s*(?:RM|rm)?\s*([\d,.]+)/i;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1]; // 数字编号
-      const product_name = match[2]?.trim(); // 最多8字
-      const rawPrice = match[3]?.replace(/,/g, ''); // 移除千分位逗号
+      const rawId = match[1];
+      let product_name = match[2]?.trim().replace(/[\s:：-]+$/, '');
 
+      // ✅ 限制最大 8 字（防止误抓）
+      if (product_name.length > 8) product_name = product_name.slice(0, 8);
+
+      const rawPrice = match[3]?.replace(/,/g, '');
       const selling_id = `B${rawId.padStart(3, '0')}`;
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
