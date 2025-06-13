@@ -14,7 +14,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
     const postRes = await fetch(
       `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
     );
@@ -25,7 +24,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // 获取留言
     const commentRes = await fetch(
       `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from&limit=100`
     );
@@ -39,26 +37,27 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from } = comment;
-      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
+      if (!message || from?.id !== PAGE_ID) continue;
 
-      // 修改后的正则表达式
-      const regex = /[Bb]\s*0*(\d+)[^\dA-Za-z]*([\u4e00-\u9fa5A-Za-z\s]+)[\s\-_/～]*[Rr][Mm]?\s*([\d,.]+)/;
+      const regex = /[Bb]\s*0*(\d{1,3})\s*[\-_/～]?\s*([^\dRrMm]+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      const nameRaw = match[2].trim().replace(/rm$/i, '').trim(); // 去除尾部 RM
+      const name = match[2]?.trim();
       const rawPrice = match[3]?.replace(/,/g, '');
 
+      if (!name || !rawPrice) continue;
+
       const selling_id = `B${rawId.padStart(3, '0')}`;
-      const product_name = nameRaw;
+      const product_name = name;
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       });
 
-      const { error } = await supabase.from('live_products').insert({
+      const { error } = await supabase.from(process.env.SUPABASE_TABLE_NAME).insert({
         selling_id,
         post_id,
         product_name,
