@@ -1,53 +1,40 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>启动监听系统</title>
-  <link rel="icon" href="/vercel-button-icon.png" />
-  <link rel="apple-touch-icon" href="/vercel-button-icon.png">
-  <meta name="apple-mobile-web-app-title" content="启动监听">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background-color: #f2f2f2;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    button {
-      background-color: #2e7d32;
-      color: white;
-      border: none;
-      padding: 20px 40px;
-      font-size: 1.5em;
-      border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-    }
-    button:active {
-      background-color: #1b5e20;
-    }
-  </style>
-</head>
-<body>
-  <button onclick="startListener()">📡 启动监听系统</button>
+// pages/start.js
+import Head from "next/head";
 
-  <script>
-    async function startListener() {
-      const res = await fetch('/api/startOrderListener', {
-        method: 'POST',
-      });
-      const result = await res.json();
-      if (result.success || res.status === 200) {
-        alert('✅ 成功启动监听系统');
-      } else {
-        alert('⚠️ 启动失败: ' + (result.error || '未知错误'));
-      }
-    }
-  </script>
-</body>
-</html>
+export default function StartListener() {
+  const start = async () => {
+    const res = await fetch("/api/startOrderListener", { method: "POST" });
+    const data = await res.json();
+    alert(data.success ? `✅ 成功启动监听\n已写入 ${data.inserted} 条留言` : `⚠️ 错误：${JSON.stringify(data)}`);
+  };
+
+  return (
+    <>
+      <Head>
+        <title>启动监听</title>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="启动监听" />
+        <link rel="apple-touch-icon" href="/peacock-icon.png" />
+      </Head>
+      <div style={{ height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "#f3f3f3" }}>
+        <button
+          onClick={start}
+          style={{
+            backgroundColor: "#2e7d32",
+            color: "white",
+            fontSize: "1.5rem",
+            padding: "16px 36px",
+            borderRadius: "16px",
+            border: "none",
+            display: "flex",
+            gap: "12px",
+            boxShadow: "0 6px 12px rgba(0,0,0,0.15)"
+          }}
+        >
+          <img src="/peacock-icon.png" alt="图标" style={{ width: 28, height: 28 }} />
+          启动监听系统
+        </button>
+      </div>
+    </>
+  );
+}
