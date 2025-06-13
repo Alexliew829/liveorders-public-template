@@ -41,25 +41,23 @@ export default async function handler(req, res) {
       const { message, from } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      const regex = /[Bb]\s*0*(\d{1,3})\s*[\-_/～:：]?\s*([\u4e00-\u9fa5A-Za-z\s]{1,20})\s*(?:RM|rm)?\s*([\d,.]+)/;
+      const regex = /[Bb]\s*0*(\d{1,3})[^\d\u4e00-\u9fa5]*([\u4e00-\u9fa5\w\s]{1,8}?)[^\d]*?(?:RM|rm)?\s*(\d{1,6}(?:[.,]\d{1,2})?)/;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      let name = match[2]
-        .replace(/[:：\-_/～\s]+/g, '') // 移除中英文符号和多余空格
-        .slice(0, 8); // 最多8个字
+      const rawName = match[2];
       const rawPrice = match[3]?.replace(/,/g, '');
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
-      const product_name = name;
+      const product_name = rawName?.trim();
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       });
 
-      const { error } = await supabase.from(process.env.SUPABASE_TABLE_NAME).insert({
+      const { error } = await supabase.from('live_products').insert({
         selling_id,
         post_id,
         product_name,
