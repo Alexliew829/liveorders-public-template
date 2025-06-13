@@ -41,28 +41,30 @@ export default async function handler(req, res) {
       const { message, from } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      const regex = /[Bb]\s*0*(\d+)\s*[\-_/～]?\s*([\u4e00-\u9fa5\w\s]+?)\s*[:：-]?\s*(?:RM|rm)?\s*([\d,.]+)/;
+      const regex = /[Bb]\s*0*(\d{1,3})\s*[\-_/～]?\s*([\u4e00-\u9fa5\w\s]+?)\s*(?:[:：-]?\s*(?:RM|rm)?\s*(\d[\d,.]*))?/;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1];
-      const name = match[2]?.replace(/^[^\w\u4e00-\u9fa5]+/, '').trim();
+      const rawId = match[1]; // 编号
+      const name = match[2]?.replace(/^[^\w\u4e00-\u9fa5]+/, '').trim(); // 商品名
       const rawPrice = match[3]?.replace(/,/g, '');
+
+      if (!rawPrice || isNaN(parseFloat(rawPrice))) continue;
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
       const product_name = name;
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       });
 
-      const { error } = await supabase.from(process.env.SUPABASE_TABLE_NAME).insert({
+      const { error } = await supabase.from('live_products').insert({
         selling_id,
         post_id,
         product_name,
         price_raw,
-        price_fmt
+        price_fmt,
       });
 
       if (!error) successCount++;
