@@ -41,14 +41,14 @@ export default async function handler(req, res) {
       const { message, from } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      // 改进正则：支持较长品种 + 灵活空格
-      const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/;
+      // 更稳健的格式识别：支持中英文空格、Rm 大小写、价格中英混排
+      const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d]{2,}[.,]?\d{0,2})\b/;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      let name = match[2].replace(/\bRM\b|\brm\b/gi, '').trim(); // 移除名称中可能误写的 RM
-      const rawPrice = match[3].replace(/,/g, '');
+      const name = match[2]?.replace(/\s+/g, '').replace(/^[-_:：~]+/, '').trim();
+      const rawPrice = match[3]?.replace(/,/g, '');
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
       const product_name = name;
