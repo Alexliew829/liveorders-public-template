@@ -14,6 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 1. 获取最新贴文 ID
     const postRes = await fetch(
       `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
     );
@@ -24,6 +25,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
+    // 2. 获取留言
     const commentRes = await fetch(
       `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from&limit=100`
     );
@@ -37,17 +39,18 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from } = comment;
-      if (!message || from?.id !== PAGE_ID) continue;
+      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      const regex = /[Bb]\s*0*(\d{1,3})\s*[-_/～]?[\s]?([\u4e00-\u9fa5\w\s]{1,8})\s*[:：-]?[\s]?(?:RM|rm)?\s*([\d,.]+)/;
+      const regex = /[Bb]\s*0*(\d{1,3})\s*[\-_/～:：]?\s*([\u4e00-\u9fa5A-Za-z\s]{1,20})\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      let name = match[2]?.replace(/[^一-龥\w\s]/g, '').trim();
-      if (name.length > 8) name = name.slice(0, 8);
-
+      let name = match[2]
+        .replace(/[:：\-_/～\s]+/g, '') // 移除中英文符号和多余空格
+        .slice(0, 8); // 最多8个字
       const rawPrice = match[3]?.replace(/,/g, '');
+
       const selling_id = `B${rawId.padStart(3, '0')}`;
       const product_name = name;
       const price_raw = parseFloat(rawPrice).toFixed(2);
