@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
+    // 1. 获取最新贴文 ID
     const postRes = await fetch(
       `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
     );
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // 获取留言
+    // 2. 获取留言
     const commentRes = await fetch(
       `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from&limit=100`
     );
@@ -41,26 +41,32 @@ export default async function handler(req, res) {
       const { message, from } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      // 正则：B + 编号 + 名称 + RM 价格
-      const regex = /[Bb]\s*0*(\d{1,3})[\s\-_/～]?\s*([\u4e00-\u9fa5A-Za-z\s]+?)\s*(?:[:：-])?\s*(?:RM|rm)?\s*([\d,\.]+)/;
+      // 更精确的正则表达式，确保不把 RM 包含进 product_name
+      const regex = /[Bb]\s*0*(\d+)[^\dA-Za-z]*([\u4e00-\u9fa5A-Za-z\s]+?)[\s\-_/～]*[Rr][Mm]?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      const name = match[2]?.replace(/[^\u4e00-\u9fa5A-Za-z0-9\s]/g, '').trim(); // 去掉符号
+      const nameRaw = match[2].trim().replace(/rm$/i, ''); // 去除尾部 rm
       const rawPrice = match[3]?.replace(/,/g, '');
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
-      const product_name = name;
+      const product_name = nameRaw;
       const price_raw = parseFloat(rawPrice).toFixed(2);
-      const price_fmt = 'RM' + parseFloat(rawPrice).toLocaleString('en-MY', {
+      const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
+        style: 'currency',
+        currency: 'MYR',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-      });
+      }).replace('MYR', 'RM');
 
-      const { error } = await supabase
-        .from(process.env.SUPABASE_TABLE_NAME)
-        .insert({ selling_id, post_id, product_name, price_raw, price_fmt });
+      const { error } = await supabase.from(process.env.SUPABASE_TABLE_NAME).insert({
+        selling_id,
+        post_id,
+        product_name,
+        price_raw,
+        price_fmt
+      });
 
       if (!error) successCount++;
     }
