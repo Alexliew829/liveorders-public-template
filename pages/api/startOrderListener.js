@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. 获取最新贴文 ID
+    // 获取最新贴文 ID
     const postRes = await fetch(
       `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
     );
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // 2. 获取留言
+    // 获取留言
     const commentRes = await fetch(
       `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from&limit=100`
     );
@@ -41,16 +41,15 @@ export default async function handler(req, res) {
       const { message, from } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      const regex = /[Bb]\s*0*(\d{1,3})[^\d\u4e00-\u9fa5]*([\u4e00-\u9fa5\w\s]{1,8}?)[^\d]*?(?:RM|rm)?\s*(\d{1,6}(?:[.,]\d{1,2})?)/;
+      const regex = /[Bb]\s*0*(\d{1,3})[\s\-_/～]*([\u4e00-\u9fa5]{1,8})\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1];
-      const rawName = match[2];
-      const rawPrice = match[3]?.replace(/,/g, '');
+      const rawId = match[1]; // 数字编号
+      const product_name = match[2]?.trim(); // 最多8字
+      const rawPrice = match[3]?.replace(/,/g, ''); // 移除千分位逗号
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
-      const product_name = rawName?.trim();
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
         minimumFractionDigits: 2,
