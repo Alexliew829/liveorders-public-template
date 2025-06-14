@@ -6,10 +6,10 @@
   <title>订单管理系统</title>
 
   <!-- iOS 主屏幕图标 -->
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="/payment-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Payment">
-  
+
   <style>
     body {
       font-family: sans-serif;
@@ -38,7 +38,7 @@
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      width: 220px;
+      width: 240px;
     }
 
     .action-button:hover {
@@ -47,14 +47,18 @@
   </style>
 </head>
 <body>
-  <img src="/apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
+  <!-- 顶部图标 -->
+  <img src="/payment-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
+    <!-- 启动监听按钮 -->
     <button class="action-button" onclick="callAPI('/api/startOrderListener')">
-      ✅ 启动监听
+      ✅ 启动监听系统
     </button>
+
+    <!-- 发送付款连接按钮 -->
     <button class="action-button" onclick="callAPI('/api/watchVisitorOrders')">
-      📦 手动发链接
+      📦 手动发送付款连接
     </button>
   </div>
 
