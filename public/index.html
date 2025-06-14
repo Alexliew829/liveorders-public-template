@@ -13,7 +13,7 @@
   <style>
     body {
       font-family: sans-serif;
-      background-color: #f7f7f7;
+      background-color: #ffffff;
       text-align: center;
       padding-top: 60px;
     }
@@ -33,16 +33,17 @@
     .action-button {
       padding: 14px 28px;
       font-size: 18px;
-      background-color: crimson;
+      background-color: #28a745;
       color: white;
       border: none;
-      border-radius: 10px;
+      border-radius: 12px;
       cursor: pointer;
-      width: 250px;
+      width: 260px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
 
     .action-button:hover {
-      background-color: darkred;
+      background-color: #218838;
     }
   </style>
 </head>
@@ -51,10 +52,10 @@
 
   <div class="button-container">
     <button class="action-button" onclick="callAPI('/api/startOrderListener')">
-      ✅ 启动监听
+      📡 启动监听系统
     </button>
     <button class="action-button" onclick="callAPI('/api/watchVisitorOrders')">
-      📦 付款链接
+      ➕ 发送付款连接
     </button>
   </div>
 
