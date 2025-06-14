@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -6,50 +7,45 @@
   <title>订单管理系统</title>
 
   <!-- iOS 主屏幕图标 -->
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Payment" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Payment">
 
   <style>
     body {
       font-family: sans-serif;
-      background-color: #ffffff;
+      background-color: #f9f9f9;
       text-align: center;
       padding-top: 60px;
     }
-
     .icon {
-      width: 120px;
+      width: 100px;
       margin-bottom: 30px;
     }
-
     .button-container {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 20px;
     }
-
     .action-button {
       padding: 14px 28px;
       font-size: 18px;
-      background-color: #28a745;
+      background-color: #2e7d32;
       color: white;
       border: none;
-      border-radius: 12px;
+      border-radius: 8px;
       cursor: pointer;
-      width: 260px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      width: 240px;
+      font-weight: bold;
     }
-
     .action-button:hover {
-      background-color: #218838;
+      background-color: #1b5e20;
     }
   </style>
 </head>
 <body>
-  <img src="/apple-touch-icon.png" alt="Payment Icon" class="icon" />
-
+  <img src="/apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
   <div class="button-container">
     <button class="action-button" onclick="callAPI('/api/startOrderListener')">
       📡 启动监听系统
@@ -58,15 +54,14 @@
       ➕ 发送付款连接
     </button>
   </div>
-
   <script>
     async function callAPI(url) {
       try {
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
-        alert('操作成功：' + JSON.stringify(data));
+        alert('✅ 操作成功：' + JSON.stringify(data));
       } catch (err) {
-        alert('请求失败：' + err.message);
+        alert('❌ 请求失败：' + err.message);
       }
     }
   </script>
