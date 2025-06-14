@@ -44,16 +44,19 @@ export default async function handler(req, res) {
       const { message, from, id: comment_id } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      // 识别格式：B001 商品名 RM1234.56（大小写不分）
+     // 识别格式：B001 商品名 RM1234.56（大小写不分）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1];
-      let product_name = match[2]?.trim();
+      const rawId = match[1]; // 编号数字
+      let product_name = match[2]?.trim(); // 商品名（含rm要清理）
       const rawPrice = match[3]?.replace(/,/g, '');
 
+      // 移除尾部 rm 或 RM（例如 小叶香水梅rm）
       product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
+
+      // 限制最多 8 个字（仅保留中文/英文/数字）
       product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
