@@ -1,7 +1,8 @@
+// pages/api/watchVisitorOrders.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const serviceAccount = JSON.parse(process.env['firebase-admin-key.json']);
+const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
 if (!getApps().length) {
   initializeApp({
@@ -31,7 +32,9 @@ export default async function handler(req, res) {
     const products = {};
     snapshot.forEach(doc => {
       const data = doc.data();
-      products[data.selling_id.toUpperCase()] = data;
+      if (data.selling_id) {
+        products[data.selling_id.toUpperCase()] = data;
+      }
     });
 
     if (Object.keys(products).length === 0) {
@@ -49,7 +52,7 @@ export default async function handler(req, res) {
       const user = comment.from;
       const comment_id = comment.id;
 
-      if (!msg || !user?.id) continue;
+      if (!msg || !user?.id || !comment_id) continue;
 
       // Step 3: 是否为商品编号留言（如 B01）
       for (const id in products) {
@@ -74,14 +77,14 @@ export default async function handler(req, res) {
 
           // Step 5: 自动留言回复
           const product = products[id];
-          const message = `🎉 感谢下单 ${id} ${product.product_name}，价格 RM${product.price_raw}\n请点击以下付款连接完成订单（限时 60 分钟）：\nhttps://your-payment-link.com?id=${comment_id}`;
+          const message = `\uD83C\uDF89 感谢下单 ${id} ${product.product_name}，价格 RM${product.price_raw}\n请点击以下付款连接完成订单（限时 60 分钟）：\nhttps://your-payment-link.com?id=${comment_id}`;
 
           await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               message,
-              access_token: PAGE_TOKEN
+              access_token: PAGE_TOKEN,
             })
           });
 
@@ -95,7 +98,6 @@ export default async function handler(req, res) {
       success: true,
       matched,
     });
-
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
