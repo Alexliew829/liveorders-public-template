@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       const { message, from, id: comment_id } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-      // 识别格式：B001 商品名 RM1234.56
+      // 识别格式：B001 商品名 RM1234.56（大小写不分）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
