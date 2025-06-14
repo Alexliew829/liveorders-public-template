@@ -1,3 +1,4 @@
+// pages/api/startOrderListener.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -5,7 +6,7 @@ const serviceAccount = JSON.parse(process.env['firebase-admin-key.json']);
 
 if (!getApps().length) {
   initializeApp({
-    credential: cert(serviceAccount),
+    credential: cert(serviceAccount)
   });
 }
 
@@ -20,9 +21,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const postRes = await fetch(
-      `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
-    );
+    // 获取最新贴文 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
 
@@ -30,9 +30,8 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    const commentRes = await fetch(
-      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from&limit=100`
-    );
+    // 获取留言
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
@@ -42,9 +41,10 @@ export default async function handler(req, res) {
     let successCount = 0;
 
     for (const comment of commentData.data) {
-      const { message, from } = comment;
-      if (!message || from?.id !== PAGE_ID) continue;
+      const { message, from, id: comment_id } = comment;
+      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
+      // 识别格式：B001 商品名 RM1234.56
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
@@ -63,12 +63,14 @@ export default async function handler(req, res) {
         maximumFractionDigits: 2,
       });
 
-      await db.collection('live_products').add({
+      const docRef = db.collection('live_products').doc(selling_id);
+      await docRef.set({
         selling_id,
         post_id,
         product_name,
         price_raw,
         price_fmt,
+        comment_id,
         created_at: new Date()
       });
 
