@@ -1,8 +1,7 @@
-// pages/api/watchVisitorOrders.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+const serviceAccount = JSON.parse(process.env['firebase-admin-key.json']);
 
 if (!getApps().length) {
   initializeApp({
@@ -32,9 +31,7 @@ export default async function handler(req, res) {
     const products = {};
     snapshot.forEach(doc => {
       const data = doc.data();
-      if (data.selling_id) {
-        products[data.selling_id.toUpperCase()] = data;
-      }
+      products[data.selling_id.toUpperCase()] = data;
     });
 
     if (Object.keys(products).length === 0) {
@@ -52,9 +49,11 @@ export default async function handler(req, res) {
       const user = comment.from;
       const comment_id = comment.id;
 
-      if (!msg || !user?.id || !comment_id) continue;
+      if (!msg || !user?.id) continue;
 
-      // Step 3: 是否为商品编号留言（如 B01）
+      // 🧪 暂时允许管理员留言测试，正式上线时可加判断跳过 PAGE_ID
+      // if (user.id === PAGE_ID) continue;
+
       for (const id in products) {
         if (msg.includes(id)) {
           // 检查是否已有该商品订单
@@ -65,7 +64,7 @@ export default async function handler(req, res) {
           const already = orders.docs.some(doc => doc.data().from_id === user.id);
           if (already) continue;
 
-          // Step 4: 记录顾客下单
+          // Step 3: 写入订单记录
           await db.collection('triggered_comments').add({
             comment_id,
             post_id,
@@ -75,21 +74,21 @@ export default async function handler(req, res) {
             created_at: new Date()
           });
 
-          // Step 5: 自动留言回复
+          // Step 4: 自动留言回复付款连接
           const product = products[id];
-          const message = `\uD83C\uDF89 感谢下单 ${id} ${product.product_name}，价格 RM${product.price_raw}\n请点击以下付款连接完成订单（限时 60 分钟）：\nhttps://your-payment-link.com?id=${comment_id}`;
+          const message = `🎉 感谢下单 ${id} ${product.product_name}，价格 RM${product.price_raw}\n请点击以下付款连接完成订单（限时 60 分钟）：\nhttps://your-payment-link.com?id=${comment_id}`;
 
           await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               message,
-              access_token: PAGE_TOKEN,
+              access_token: PAGE_TOKEN
             })
           });
 
           matched.push({ user: user.name, selling_id: id });
-          break; // 每条留言只处理一个商品
+          break;
         }
       }
     }
@@ -98,6 +97,7 @@ export default async function handler(req, res) {
       success: true,
       matched,
     });
+
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
