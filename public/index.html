@@ -17,30 +17,37 @@
       padding-top: 60px;
     }
     .icon {
-      width: 140px;
-      margin-bottom: 50px;
+      width: 120px;
+      margin-bottom: 40px;
     }
     .button-container {
       display: flex;
       flex-direction: column;
-      gap: 60px; /* 增加按钮间距 */
+      gap: 24px;
       align-items: center;
     }
     .action-button {
-      padding: 18px 30px;
+      padding: 16px 32px;
       font-size: 20px;
       background-color: #228B22;
-      color: white;
-      font-weight: bold; /* 加粗字体 */
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3); /* 加深对比 */
+      color: #fff;
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
       cursor: pointer;
-      width: 300px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      width: 280px;
+      font-weight: bold;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     .action-button:hover {
       background-color: #1a6f1a;
+    }
+    #postInput {
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      width: 280px;
+      margin-bottom: 12px;
     }
   </style>
 </head>
@@ -51,8 +58,11 @@
     <button class="action-button" onclick="callAPI('/api/startOrderListener')">
       📡 启动监听系统
     </button>
-    <button class="action-button" onclick="callAPI('/api/watchVisitorOrders')">
-      ➕ 付款连接
+
+    <input type="text" id="postInput" placeholder="输入 Facebook 贴文 ID" />
+
+    <button class="action-button" onclick="sendPaymentLink()">
+      ➕ 发送付款连接
     </button>
   </div>
 
@@ -64,6 +74,23 @@
         alert('操作成功：' + JSON.stringify(data));
       } catch (err) {
         alert('请求失败：' + err.message);
+      }
+    }
+
+    async function sendPaymentLink() {
+      const postId = document.getElementById('postInput').value.trim();
+      if (!postId) return alert('请先输入 Facebook 帖文 ID');
+
+      try {
+        const res = await fetch('/api/watchVisitorOrders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ post_id: postId })
+        });
+        const data = await res.json();
+        alert('发送成功：' + JSON.stringify(data));
+      } catch (err) {
+        alert('发送失败：' + err.message);
       }
     }
   </script>
