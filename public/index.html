@@ -41,28 +41,20 @@
     .action-button:hover {
       background-color: #1a6f1a;
     }
-    #postInput {
-      font-size: 16px;
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      width: 280px;
-      margin-bottom: 12px;
-    }
   </style>
 </head>
 <body>
   <img src="/apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
+    <!-- 启动监听主页留言 -->
     <button class="action-button" onclick="callAPI('/api/startOrderListener')">
-      📡 启动监听系统
+      📡 启动主页留言监听
     </button>
 
-    <input type="text" id="postInput" placeholder="输入 Facebook 贴文 ID" />
-
+    <!-- 启动监听顾客留言 -->
     <button class="action-button" onclick="sendPaymentLink()">
-      ➕ 发送付款连接
+      ➕ 监听顾客留言
     </button>
   </div>
 
@@ -78,14 +70,11 @@
     }
 
     async function sendPaymentLink() {
-      const postId = document.getElementById('postInput').value.trim();
-      if (!postId) return alert('请先输入 Facebook 帖文 ID');
-
       try {
         const res = await fetch('/api/watchVisitorOrders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ post_id: postId })
+          body: JSON.stringify({ post_id: 'latest' })  // 获取最新的帖子ID
         });
         const data = await res.json();
         alert('发送成功：' + JSON.stringify(data));
