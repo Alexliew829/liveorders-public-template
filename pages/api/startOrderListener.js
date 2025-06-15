@@ -1,16 +1,9 @@
-// pages/api/startOrderListener.js
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { createClient } from '@supabase/supabase-js';
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount)
-  });
-}
-
-const db = getFirestore();
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
@@ -22,7 +15,9 @@ export default async function handler(req, res) {
 
   try {
     // 获取最新贴文 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+    const postRes = await fetch(
+      `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
+    );
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
 
@@ -31,7 +26,9 @@ export default async function handler(req, res) {
     }
 
     // 获取留言
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
+    const commentRes = await fetch(
+      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from&limit=100`
+    );
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
@@ -41,10 +38,10 @@ export default async function handler(req, res) {
     let successCount = 0;
 
     for (const comment of commentData.data) {
-      const { message, from, id: comment_id } = comment;
+      const { message, from } = comment;
       if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
-     // 识别格式：B001 商品名 RM1234.56（大小写不分）
+      // 识别格式：B001 商品名 RM1234.56（大小写不分）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
@@ -66,18 +63,15 @@ export default async function handler(req, res) {
         maximumFractionDigits: 2,
       });
 
-      const docRef = db.collection('live_products').doc(selling_id);
-      await docRef.set({
+      const { error } = await supabase.from('live_products').insert({
         selling_id,
         post_id,
         product_name,
         price_raw,
-        price_fmt,
-        comment_id,
-        created_at: new Date()
+        price_fmt
       });
 
-      successCount++;
+      if (!error) successCount++;
     }
 
     return res.status(200).json({ success: true, inserted: successCount });
