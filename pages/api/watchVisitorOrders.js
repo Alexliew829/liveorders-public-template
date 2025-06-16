@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   try {
     const commentRes = await fetch(
-      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`
+      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`
     );
     const commentData = await commentRes.json();
 
@@ -32,63 +32,59 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '找不到任何留言', raw: commentData });
     }
 
-    const liveProducts = await db.collection('live_products').get();
-    const productMap = {};
-    liveProducts.forEach((doc) => {
-      const data = doc.data();
-      productMap[data.selling_id] = data;
-    });
-
-    const triggered = new Set();
-    const written = [];
-
+    let successCount = 0;
     for (const comment of commentData.data) {
-      const { message, from, id: comment_id } = comment;
-      if (!message || !from || from.id === PAGE_ID) continue; // 忽略主页
+      const { message, from, id: comment_id, created_time } = comment;
+      if (!message || !from || !from.id) continue;
 
-      const match = message.match(/[Bb]\s*0*(\d{1,3})/);
+      // 跳过主页与管理员留言
+      if (from.id === PAGE_ID || from.name?.includes('Lover Legend Gardening')) continue;
+
+      // 识别留言格式：B1、b01、B001、b 01 等等
+      const match = message.match(/\b[bB][\s0]*([0-9]{1,3})\b/);
       if (!match) continue;
 
       const rawId = match[1];
       const selling_id = `B${rawId.padStart(3, '0')}`;
 
-      if (triggered.has(selling_id)) continue;
-
-      const product = productMap[selling_id];
-      if (!product) continue;
-
-      // 检查是否已有顾客留言
-      const existing = await db
-        .collection('triggered_comments')
+      // 检查是否已有访客下单该商品
+      const existing = await db.collection('triggered_comments')
         .where('selling_id', '==', selling_id)
         .get();
-      if (!existing.empty) continue;
+      if (!existing.empty) continue; // 只允许第一个留言者
 
-      const user_id = from.id || '';
+      // 从 live_products 获取商品资料
+      const productSnap = await db.collection('live_products').doc(selling_id).get();
+      if (!productSnap.exists) continue;
+      const product = productSnap.data();
+
+      const user_id = from.id;
       const user_name = from.name || '';
 
-      const payment_url = `https://pay.example.com/${selling_id}-${comment_id}`;
+      const shortId = comment_id.slice(-6);
+      const payment_url = `https://pay.example.com/${selling_id}-${shortId}`;
 
+      // 写入触发记录
       await db.collection('triggered_comments').doc(comment_id).set({
         selling_id,
         post_id,
         comment_id,
         user_id,
         user_name,
+        replied: false,
+        status: 'pending',
         product_name: product.product_name,
         price_fmt: product.price_fmt,
-        price_raw: product.price_raw,
         payment_url,
-        status: 'pending',
-        replied: false,
         created_at: new Date(),
       });
 
-      triggered.add(selling_id);
-      written.push({ comment_id, selling_id });
+      // 可以在这里调用自动回复系统（Catalog/Make），或后续处理
+
+      successCount++;
     }
 
-    return res.status(200).json({ success: true, inserted: written.length, written });
+    return res.status(200).json({ success: true, inserted: successCount });
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
