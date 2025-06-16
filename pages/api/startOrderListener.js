@@ -1,9 +1,13 @@
+// pages/api/startOrderListener.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+
 if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
+  initializeApp({
+    credential: cert(serviceAccount),
+  });
 }
 
 const db = getFirestore();
@@ -11,23 +15,30 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  const isDebug = req.query.debug !== undefined;
+
+  if (req.method !== 'POST' && !isDebug) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
   try {
-    // ✅ 自动获取最新贴文 ID
+    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
-    const latestPost = postData?.data?.[0];
-    if (!latestPost?.id) {
-      return res.status(404).json({ error: '未获取到贴子 ID', raw: postData });
-    }
-    const post_id = latestPost.id;
+    const post_id = postData?.data?.[0]?.id;
 
-    // ✅ 获取留言
+    if (!post_id) {
+      return res.status(404).json({ error: '未获取到帖子 ID', raw: postData });
+    }
+
+    if (isDebug) {
+      return res.status(200).json({ debug: true, post_id, message: '获取成功，可执行监听操作' });
+    }
+
+    // 获取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
     const commentData = await commentRes.json();
+
     if (!commentData?.data?.length) {
       return res.status(404).json({ error: '找不到任何留言', raw: commentData });
     }
@@ -36,15 +47,17 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id } = comment;
-      if (!message || from?.id !== PAGE_ID) continue;
+      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
+      // 识别格式：B001 商品名 RM1234.56（大小写不分）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1];
+      const rawId = match[1]; // 编号数字
       let product_name = match[2]?.trim();
       const rawPrice = match[3]?.replace(/,/g, '');
+
       product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
       product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
