@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   try {
     const commentRes = await fetch(
-      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`
+      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`
     );
     const commentData = await commentRes.json();
 
@@ -32,55 +32,63 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '找不到任何留言', raw: commentData });
     }
 
-    let successCount = 0;
+    const liveProducts = await db.collection('live_products').get();
+    const productMap = {};
+    liveProducts.forEach((doc) => {
+      const data = doc.data();
+      productMap[data.selling_id] = data;
+    });
+
+    const triggered = new Set();
+    const written = [];
 
     for (const comment of commentData.data) {
-      const { message, from, id: comment_id, created_time } = comment;
-      if (!message || !from?.id || from.id === PAGE_ID) continue; // 忽略管理员留言
+      const { message, from, id: comment_id } = comment;
+      if (!message || !from || from.id === PAGE_ID) continue; // 忽略主页
 
-      // 宽容识别 B 编号（不区分大小写、不限空格）
-      const regex = /[Bb]\s*0*(\d{1,3})\b/;
-      const match = message.match(regex);
+      const match = message.match(/[Bb]\s*0*(\d{1,3})/);
       if (!match) continue;
 
       const rawId = match[1];
       const selling_id = `B${rawId.padStart(3, '0')}`;
 
-      const productSnap = await db.collection('live_products').doc(selling_id).get();
-      if (!productSnap.exists) continue; // 无此商品
+      if (triggered.has(selling_id)) continue;
 
-      const product = productSnap.data();
+      const product = productMap[selling_id];
+      if (!product) continue;
 
-      // 是否已有顾客抢先留言
-      const existsSnap = await db.collection('triggered_comments')
+      // 检查是否已有顾客留言
+      const existing = await db
+        .collection('triggered_comments')
         .where('selling_id', '==', selling_id)
-        .limit(1)
         .get();
-      if (!existsSnap.empty) continue;
+      if (!existing.empty) continue;
 
-      const user_id = from.id;
+      const user_id = from.id || '';
       const user_name = from.name || '';
 
       const payment_url = `https://pay.example.com/${selling_id}-${comment_id}`;
 
-      // 写入订单
       await db.collection('triggered_comments').doc(comment_id).set({
         selling_id,
+        post_id,
         comment_id,
         user_id,
         user_name,
         product_name: product.product_name,
         price_fmt: product.price_fmt,
+        price_raw: product.price_raw,
         payment_url,
-        replied: false,
         status: 'pending',
-        created_at: new Date()
+        replied: false,
+        created_at: new Date(),
       });
 
-      successCount++;
+      triggered.add(selling_id);
+      written.push({ comment_id, selling_id });
     }
 
-    return res.status(200).json({ success: true, inserted: successCount });
+    return res.status(200).json({ success: true, inserted: written.length, written });
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
