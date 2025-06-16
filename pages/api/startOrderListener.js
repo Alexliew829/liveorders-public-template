@@ -19,14 +19,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
-  const { post_id } = req.query;  // 从查询字符串获取 post_id
-
-  if (!post_id) {
-    return res.status(400).json({ error: '缺少 post_id 参数' });
-  }
-
   try {
-    // 获取留言
+    // ✅ 自动获取主页最新贴文 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+    const postData = await postRes.json();
+    const post_id = postData?.data?.[0]?.id;
+
+    if (!post_id) {
+      return res.status(404).json({ error: '未获取到贴子 ID', raw: postData });
+    }
+
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
     const commentData = await commentRes.json();
 
@@ -38,21 +40,17 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id } = comment;
-      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
+      if (!message || from?.id !== PAGE_ID) continue;
 
-      // 识别格式：B001 商品名 RM1234.56（大小写不分）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1]; // 编号数字
-      let product_name = match[2]?.trim(); // 商品名（含rm要清理）
+      const rawId = match[1];
+      let product_name = match[2]?.trim();
       const rawPrice = match[3]?.replace(/,/g, '');
 
-      // 移除尾部 rm 或 RM（例如 小叶香水梅rm）
       product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
-
-      // 限制最多 8 个字（仅保留中文/英文/数字）
       product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
