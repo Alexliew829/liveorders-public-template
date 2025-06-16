@@ -1,3 +1,4 @@
+// pages/api/watchVisitorOrders.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -22,64 +23,58 @@ export default async function handler(req, res) {
   }
 
   try {
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`);
+    const commentRes = await fetch(
+      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`
+    );
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
-      return res.status(404).json({ error: '找不到留言', raw: commentData });
+      return res.status(404).json({ error: '找不到任何留言', raw: commentData });
     }
 
-    const insertedSet = new Set();
-    let insertedCount = 0;
-
+    let successCount = 0;
     for (const comment of commentData.data) {
       const { message, from, id: comment_id, created_time } = comment;
-      if (!message || !from?.id) continue;
+      if (!message || !from?.id || from.id === PAGE_ID) continue; // 跳过主页或无ID留言
 
-      // ✅ 跳过主页或管理员（只保留访客）
-      if (from.id === PAGE_ID) continue;
-
-      // ✅ 留言格式宽容匹配 B123, b 123, b001 等
-      const match = message.match(/(?:^|\s)[Bb]\s*0*(\d{1,3})(?:\s|$)/);
+      const regex = /[Bb][^\d]*(\d{1,3})/;
+      const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
       const selling_id = `B${rawId.padStart(3, '0')}`;
 
-      if (insertedSet.has(selling_id)) continue;
-
-      // ✅ 只抓第一个访客留言者（Firestore 检查）
-      const existing = await db.collection('triggered_comments')
+      // 是否已记录这个商品的留言者（避免重复写入）
+      const existing = await db
+        .collection('triggered_comments')
+        .where('post_id', '==', post_id)
         .where('selling_id', '==', selling_id)
         .limit(1)
         .get();
+
       if (!existing.empty) continue;
 
-      // ✅ 查找商品资料
-      const productSnap = await db.collection('live_products').doc(selling_id).get();
-      if (!productSnap.exists) continue;
+      const user_id = from.id;
+      const user_name = from.name || '';
 
-      const product = productSnap.data();
-      const payment_url = `https://pay.example.com/${selling_id}-${comment_id}`;
+      const payment_url = `https://your-site.com/pay?product=${selling_id}&uid=${user_id}`;
 
       await db.collection('triggered_comments').doc(comment_id).set({
-        selling_id,
         comment_id,
         post_id,
-        user_id: from.id,
-        user_name: from.name || '',
-        product_name: product.product_name || '',
-        price_fmt: product.price_fmt || '',
-        price_raw: product.price_raw || '',
+        selling_id,
+        user_id,
+        user_name,
         payment_url,
-        created_at: new Date(created_time),
+        status: 'pending',
+        replied: false,
+        created_at: new Date(),
       });
 
-      insertedSet.add(selling_id);
-      insertedCount++;
+      successCount++;
     }
 
-    return res.status(200).json({ success: true, inserted: insertedCount });
+    return res.status(200).json({ success: true, inserted: successCount });
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
