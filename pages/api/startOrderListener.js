@@ -16,20 +16,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文
+    // ✅ 自动获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
+    const post_id = postData?.data?.[0]?.id;
 
-    if (!postData?.data?.length) {
-      return res.status(404).json({
-        error: '未获取到贴子 ID（可能没有公开贴文，或权限不足）',
-        debug: postData
-      });
+    if (!post_id) {
+      return res.status(404).json({ error: '未获取到贴文 ID', raw: postData });
     }
 
-    const post_id = postData.data[0].id;
-
-    // 获取留言
+    // ✅ 抓留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
     const commentData = await commentRes.json();
 
@@ -41,7 +37,7 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id } = comment;
-      if (!message || from?.id !== PAGE_ID) continue;
+      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
 
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
@@ -75,8 +71,7 @@ export default async function handler(req, res) {
       successCount++;
     }
 
-    return res.status(200).json({ success: true, inserted: successCount, post_id });
-
+    return res.status(200).json({ success: true, inserted: successCount });
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
