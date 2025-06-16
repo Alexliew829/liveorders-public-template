@@ -5,9 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
 if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount),
-  });
+  initializeApp({ credential: cert(serviceAccount) });
 }
 
 const db = getFirestore();
@@ -22,7 +20,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
+    // 取得最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -36,7 +34,7 @@ export default async function handler(req, res) {
     }
 
     // 获取留言
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`);
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
@@ -46,19 +44,26 @@ export default async function handler(req, res) {
     let successCount = 0;
 
     for (const comment of commentData.data) {
-      const { message, from, id: comment_id } = comment;
-      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
+      const { message, from, id: comment_id, created_time } = comment;
+      if (!message) continue;
 
-      // 识别格式：B001 商品名 RM1234.56（大小写不分）
+      // 可选：跳过过旧留言（超过 5 分钟）
+      const now = new Date();
+      const createdAt = new Date(created_time);
+      if (now - createdAt > 5 * 60 * 1000) continue;
+
+      // 识别留言格式：B123 商品名 RM4567.89（不分大小写）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1]; // 编号数字
+      const rawId = match[1];
       let product_name = match[2]?.trim();
       const rawPrice = match[3]?.replace(/,/g, '');
 
+      // 移除尾部 rm
       product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
+      // 限制最多 8 个字（中英数）
       product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
@@ -68,6 +73,7 @@ export default async function handler(req, res) {
         maximumFractionDigits: 2,
       });
 
+      // 写入 Firestore（以 selling_id 为 ID）
       const docRef = db.collection('live_products').doc(selling_id);
       await docRef.set({
         selling_id,
