@@ -70,7 +70,7 @@
 
     async function sendPaymentLink() {
       try {
-        const res = await fetch(`/api/watchVisitorOrders?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch(`/api/fromMakeWebhook?post_id=${FIXED_POST_ID}`, { method: 'POST' });
         const data = await res.json();
         alert('发送付款链接成功：' + JSON.stringify(data));
       } catch (err) {
