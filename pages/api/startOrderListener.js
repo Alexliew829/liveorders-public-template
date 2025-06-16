@@ -49,7 +49,7 @@ export default async function handler(req, res) {
 
       const now = new Date();
       const createdAt = new Date(created_time);
-      if (now - createdAt > 5 * 60 * 1000) continue;
+      if (now - createdAt > 10 * 60 * 1000) continue;
 
       // 识别格式：B001 商品名 RM1234.56（宽容匹配）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)\s*([\d,.]+)/i;
