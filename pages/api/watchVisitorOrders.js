@@ -5,9 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
 if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount),
-  });
+  initializeApp({ credential: cert(serviceAccount) });
 }
 
 const db = getFirestore();
@@ -19,14 +17,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
-  const { post_id } = req.query;  // 获取 post_id 参数
-
+  const { post_id } = req.query;
   if (!post_id) {
     return res.status(400).json({ error: '缺少 post_id 参数' });
   }
 
   try {
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
+    const commentRes = await fetch(
+      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`
+    );
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
@@ -34,16 +33,20 @@ export default async function handler(req, res) {
     }
 
     let successCount = 0;
+
     for (const comment of commentData.data) {
       const { message, from, id: comment_id } = comment;
-      if (!message || from?.id !== PAGE_ID) continue;
 
-      const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
-      const match = message.match(regex);
+      // ✅ 忽略主页（管理员）留言，只处理访客
+      if (!message || from?.id === PAGE_ID) continue;
+
+      // ✅ 仅匹配：B编号（B01、b 001、b1、B199 等）
+      const match = message.match(/[Bb]\s*0*(\d{1,3})\b/);
       if (!match) continue;
 
       const rawId = match[1];
       const selling_id = `B${rawId.padStart(3, '0')}`;
+
       const docRef = db.collection('triggered_comments').doc(comment_id);
       await docRef.set({
         selling_id,
