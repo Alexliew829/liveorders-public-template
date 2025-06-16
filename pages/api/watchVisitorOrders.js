@@ -1,4 +1,3 @@
-// pages/api/watchVisitorOrders.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -30,28 +29,33 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '找不到留言', raw: commentData });
     }
 
-    let inserted = 0;
+    const insertedSet = new Set();
+    let insertedCount = 0;
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id, created_time } = comment;
+      if (!message || !from?.id) continue;
 
-      if (!message || !from?.id || from.id === PAGE_ID) continue; // 跳过主页/管理员
+      // ✅ 跳过主页或管理员（只保留访客）
+      if (from.id === PAGE_ID) continue;
 
-      // 宽容匹配 B 编号（如 b1、b 01、b001）
+      // ✅ 留言格式宽容匹配 B123, b 123, b001 等
       const match = message.match(/(?:^|\s)[Bb]\s*0*(\d{1,3})(?:\s|$)/);
       if (!match) continue;
 
       const rawId = match[1];
       const selling_id = `B${rawId.padStart(3, '0')}`;
 
-      // 检查是否已有顾客抢先留言（避免重复写入）
+      if (insertedSet.has(selling_id)) continue;
+
+      // ✅ 只抓第一个访客留言者（Firestore 检查）
       const existing = await db.collection('triggered_comments')
         .where('selling_id', '==', selling_id)
         .limit(1)
         .get();
       if (!existing.empty) continue;
 
-      // 获取商品资料
+      // ✅ 查找商品资料
       const productSnap = await db.collection('live_products').doc(selling_id).get();
       if (!productSnap.exists) continue;
 
@@ -60,21 +64,22 @@ export default async function handler(req, res) {
 
       await db.collection('triggered_comments').doc(comment_id).set({
         selling_id,
-        post_id,
         comment_id,
+        post_id,
         user_id: from.id,
         user_name: from.name || '',
-        created_at: new Date(created_time),
-        payment_url,
         product_name: product.product_name || '',
         price_fmt: product.price_fmt || '',
         price_raw: product.price_raw || '',
+        payment_url,
+        created_at: new Date(created_time),
       });
 
-      inserted++;
+      insertedSet.add(selling_id);
+      insertedCount++;
     }
 
-    return res.status(200).json({ success: true, inserted });
+    return res.status(200).json({ success: true, inserted: insertedCount });
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
