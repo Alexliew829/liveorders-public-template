@@ -23,19 +23,20 @@
     .button-container {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 30px;
       align-items: center;
     }
     .action-button {
-      padding: 14px 28px;
-      font-size: 18px;
+      padding: 18px 30px;
+      font-size: 20px;
+      font-weight: bold;
       background-color: #228B22;
       color: white;
       border: none;
       border-radius: 10px;
       cursor: pointer;
-      width: 260px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      width: 280px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
     .action-button:hover {
       background-color: #1a6f1a;
@@ -55,47 +56,50 @@
   </div>
 
   <script>
-    async function startOrderListener() {
+    async function getLatestPostId() {
       try {
-        const postId = await getLatestPostId();
-        if (postId) {
-          const res = await fetch(`/api/startOrderListener?post_id=${postId}`, { method: 'POST' });
-          const data = await res.json();
-          alert('启动监听成功：' + JSON.stringify(data));
+        const res = await fetch('/api/getLatestPostId');
+        const data = await res.json();
+        if (data.success && data.post_id) {
+          return data.post_id.trim();
         } else {
-          alert('未获取到帖子ID');
+          throw new Error("无法获取帖子 ID");
         }
       } catch (err) {
-        alert('请求失败：' + err.message);
+        alert("❌ 获取帖子ID失败：" + err.message);
+        return null;
+      }
+    }
+
+    async function startOrderListener() {
+      const postId = await getLatestPostId();
+      if (!postId) {
+        alert("未获取到帖子 ID");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/startOrderListener?post_id=${postId}`, { method: 'POST' });
+        const data = await res.json();
+        alert("✅ 启动监听成功：" + JSON.stringify(data));
+      } catch (err) {
+        alert("❌ 请求失败：" + err.message);
       }
     }
 
     async function sendPaymentLink() {
-      try {
-        const postId = await getLatestPostId();
-        if (postId) {
-          const res = await fetch(`/api/watchVisitorOrders?post_id=${postId}`, { method: 'POST' });
-          const data = await res.json();
-          alert('发送付款链接成功：' + JSON.stringify(data));
-        } else {
-          alert('未获取到帖子ID');
-        }
-      } catch (err) {
-        alert('请求失败：' + err.message);
+      const postId = await getLatestPostId();
+      if (!postId) {
+        alert("未获取到帖子 ID");
+        return;
       }
-    }
 
-    async function getLatestPostId() {
       try {
-        const res = await fetch(`/api/getLatestPostId`);
+        const res = await fetch(`/api/watchVisitorOrders?post_id=${postId}`, { method: 'POST' });
         const data = await res.json();
-        if (data.success) {
-          return data.post_id.trim();  // 清理可能的多余空格
-        }
-        throw new Error("无法获取帖子ID");
+        alert("✅ 发送付款链接成功：" + JSON.stringify(data));
       } catch (err) {
-        console.error("获取帖子ID失败:", err);
-        return null;
+        alert("❌ 请求失败：" + err.message);
       }
     }
   </script>
