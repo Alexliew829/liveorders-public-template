@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       if (now - createdAt > 5 * 60 * 1000) continue;
 
       // 识别留言格式：B123 商品名 RM4567.89（不分大小写）
-      const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
+     const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)\s*([\d,.]+)/i;
       const match = message.match(regex);
       if (!match) continue;
 
