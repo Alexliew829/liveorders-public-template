@@ -19,16 +19,15 @@ export default async function handler(req, res) {
     // ✅ 自动获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
-
-    if (!post_id) {
-      return res.status(404).json({ error: '未获取到贴文 ID', raw: postData });
+    const latestPost = postData?.data?.[0];
+    if (!latestPost?.id) {
+      return res.status(404).json({ error: '未获取到贴子 ID', raw: postData });
     }
+    const post_id = latestPost.id;
 
-    // ✅ 抓留言
+    // ✅ 获取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
     const commentData = await commentRes.json();
-
     if (!commentData?.data?.length) {
       return res.status(404).json({ error: '找不到任何留言', raw: commentData });
     }
@@ -37,7 +36,7 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id } = comment;
-      if (!message || from?.id !== PAGE_ID) continue; // 只处理主页留言
+      if (!message || from?.id !== PAGE_ID) continue;
 
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
@@ -46,7 +45,6 @@ export default async function handler(req, res) {
       const rawId = match[1];
       let product_name = match[2]?.trim();
       const rawPrice = match[3]?.replace(/,/g, '');
-
       product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
       product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
