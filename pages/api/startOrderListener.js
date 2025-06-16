@@ -1,9 +1,7 @@
-// pages/api/startOrderListener.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
@@ -18,21 +16,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 自动抓取最新贴文 ID
-    const postRes = await fetch(
-      `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
-    );
+    // 获取最新贴文
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
 
-    if (!post_id) {
-      return res.status(404).json({ error: '未获取到帖子 ID', raw: postData });
+    if (!postData?.data?.length) {
+      return res.status(404).json({
+        error: '未获取到贴子 ID（可能没有公开贴文，或权限不足）',
+        debug: postData
+      });
     }
 
-    // ✅ 获取该贴文留言
-    const commentRes = await fetch(
-      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`
-    );
+    const post_id = postData.data[0].id;
+
+    // 获取留言
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id&limit=100`);
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
@@ -45,14 +43,16 @@ export default async function handler(req, res) {
       const { message, from, id: comment_id } = comment;
       if (!message || from?.id !== PAGE_ID) continue;
 
-      // ✅ 识别格式：B001 商品名 RM1234.56（大小写不分）
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s*(?:RM|rm)?\s*([\d,.]+)/;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      let product_name = match[2]?.trim().replace(/\s*rm\s*$/i, '').replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
+      let product_name = match[2]?.trim();
       const rawPrice = match[3]?.replace(/,/g, '');
+
+      product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
+      product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
       const price_raw = parseFloat(rawPrice).toFixed(2);
@@ -75,7 +75,8 @@ export default async function handler(req, res) {
       successCount++;
     }
 
-    return res.status(200).json({ success: true, inserted: successCount });
+    return res.status(200).json({ success: true, inserted: successCount, post_id });
+
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
