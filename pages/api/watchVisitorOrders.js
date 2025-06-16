@@ -18,16 +18,12 @@ export default async function handler(req, res) {
   }
 
   const { post_id } = req.query;
-
   if (!post_id) {
     return res.status(400).json({ error: '缺少 post_id 参数' });
   }
 
   try {
-    // 取得最新留言
-    const commentRes = await fetch(
-      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`
-    );
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`);
     const commentData = await commentRes.json();
 
     if (!commentData?.data?.length) {
@@ -38,45 +34,35 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id, created_time } = comment;
-      if (!message || !from?.id || !from?.name) continue;
+      if (!message || !from?.id || from.id === PAGE_ID) continue; // 跳过主页留言
 
-      // 识别留言格式：B01 或 b001（允许空格）
-      const match = message.match(/[Bb]\s*0*(\d{1,3})\b/);
+      const regex = /^[Bb]\s*0*(\d{1,3})\b/;
+      const match = message.trim().match(regex);
       if (!match) continue;
 
       const rawId = match[1];
       const selling_id = `B${rawId.padStart(3, '0')}`;
+      const trigger_id = `${post_id}_${comment_id}`;
 
-      // 检查是否已存在该商品的下单记录（即已有顾客留言成功）
-      const existing = await db
-        .collection('triggered_comments')
-        .where('selling_id', '==', selling_id)
-        .where('post_id', '==', post_id)
-        .limit(1)
-        .get();
+      const existing = await db.collection('triggered_comments').doc(trigger_id).get();
+      if (existing.exists) continue;
 
-      if (!existing.empty) continue; // 已有顾客抢单，跳过
-
-      // 取得商品信息（从 live_products 表）
       const productSnap = await db.collection('live_products').doc(selling_id).get();
       if (!productSnap.exists) continue;
 
-      const product = productSnap.data();
-
-      // 构建付款连接（此处可替换成真实服务端 URL）
+      const { product_name, price_fmt } = productSnap.data();
       const payment_url = `https://your-site.com/pay?product=${selling_id}&uid=${from.id}`;
 
-      // 写入 triggered_comments 表
-      await db.collection('triggered_comments').doc(comment_id).set({
-        selling_id,
-        post_id,
+      await db.collection('triggered_comments').doc(trigger_id).set({
         comment_id,
+        post_id,
+        selling_id,
         user_id: from.id,
-        user_name: from.name,
+        user_name: from.name || '',
         payment_url,
         status: 'pending',
         replied: false,
-        created_at: new Date(created_time),
+        created_at: new Date(),
       });
 
       successCount++;
