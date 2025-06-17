@@ -41,22 +41,63 @@
     .action-button:hover {
       background-color: #1a6f1a;
     }
+
+    #orderSection {
+      margin-top: 50px;
+      padding: 0 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 30px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background-color: #eee;
+    }
+    .small-btn {
+      padding: 6px 12px;
+      font-size: 14px;
+      background-color: #228B22;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .small-btn:hover {
+      background-color: #1a6f1a;
+    }
   </style>
 </head>
 <body>
   <img src="/apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
-    <button class="action-button" onclick="startOrderListener()">
-      📡 启动监听系统
-    </button>
-    <button class="action-button" onclick="sendPaymentLink()">
-      ➕ 付款连接
-    </button>
+    <button class="action-button" onclick="startOrderListener()">📡 启动监听系统</button>
+    <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
+  </div>
+
+  <div id="orderSection">
+    <table id="orderTable" style="display:none">
+      <thead>
+        <tr>
+          <th>编号</th>
+          <th>商品名</th>
+          <th>顾客</th>
+          <th>金额</th>
+          <th>动作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
   <script>
-    const FIXED_POST_ID = '101411206173416_722061847440378'; // 替换为你的最新帖文 ID
+    const FIXED_POST_ID = '101411206173416_722061847440378'; // 替换为你直播的帖文 ID
 
     async function startOrderListener() {
       try {
@@ -68,13 +109,52 @@
       }
     }
 
-    async function sendPaymentLink() {
+    async function loadOrders() {
+      const res = await fetch('/api/pendingOrders');
+      const data = await res.json();
+      const tbody = document.querySelector('#orderTable tbody');
+      const table = document.getElementById('orderTable');
+      table.style.display = 'table';
+      tbody.innerHTML = '';
+
+      if (!data.orders || data.orders.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="5">目前没有待发订单</td>';
+        tbody.appendChild(row);
+        return;
+      }
+
+      data.orders.forEach(order => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${order.selling_id}</td>
+          <td>${order.product_name}</td>
+          <td>${order.user_name || '匿名用户'}</td>
+          <td>RM ${order.price_fmt}</td>
+          <td>
+            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">发送连接</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function sendPayment(commentId, btn) {
+      btn.disabled = true;
+      btn.innerText = '发送中...';
+
       try {
-        const res = await fetch(`/api/fromMakeWebhook?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
         const data = await res.json();
-        alert('发送付款链接成功：' + JSON.stringify(data));
+        if (data.success) {
+          btn.innerText = '✅ 已发送';
+        } else {
+          btn.innerText = '❌ 失败';
+          alert('发送失败: ' + (data.message || JSON.stringify(data)));
+        }
       } catch (err) {
-        alert('发送失败：' + err.message);
+        btn.innerText = '❌ 异常';
+        alert('错误: ' + err.message);
       }
     }
   </script>
