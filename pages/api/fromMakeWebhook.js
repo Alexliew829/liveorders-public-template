@@ -19,7 +19,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, from_id, from_name, comment_id, post_id, created_time } = req.body;
+    const {
+      message,
+      from_id,
+      from_name,
+      comment_id,
+      post_id,
+      created_time
+    } = req.body;
 
     if (!message || !from_id || !comment_id || !post_id) {
       return res.status(400).json({ error: '缺少必要字段', raw: req.body });
@@ -30,7 +37,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ skipped: true, reason: '管理员留言' });
     }
 
-    // 识别格式：B001、b01、B 1 等
+    // 识别格式：B1、b01、B001、b 01、b 001 等都接受
     const match = message.match(/\b[bB][\s0]*([0-9]{1,3})\b/);
     if (!match) {
       return res.status(200).json({ skipped: true, reason: '非下单格式' });
@@ -64,15 +71,23 @@ export default async function handler(req, res) {
       user_id: from_id,
       user_name: from_name || '',
       replied: false,
-      status: 'pending', // 等待人工审核
+      status: 'pending',
       product_name: product.product_name,
       price_fmt: product.price_fmt,
       payment_url,
       created_at: new Date(created_time || Date.now()),
     });
 
-    return res.status(200).json({ success: true, message: '顾客下单记录成功写入', selling_id, user: from_name });
+    return res.status(200).json({
+      success: true,
+      message: '顾客下单记录成功写入',
+      selling_id,
+      user: from_name,
+    });
   } catch (err) {
-    return res.status(500).json({ error: '服务器错误', detail: err.message });
+    return res.status(500).json({
+      error: '服务器错误',
+      detail: err.message,
+    });
   }
 }
