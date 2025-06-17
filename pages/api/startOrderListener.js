@@ -49,20 +49,16 @@ export default async function handler(req, res) {
 
       const now = new Date();
       const createdAt = new Date(created_time);
-      if (now - createdAt > 30 * 60 * 1000) continue;
+      if (now - createdAt > 30 * 60 * 1000) continue; // 30分钟限制
 
-      // 识别格式：B001 商品名 RM1234.56（宽容匹配）
+      // 宽容格式：B001 商品名 RM1234.56
       const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/i;
       const match = message.match(regex);
       if (!match) continue;
 
       const rawId = match[1];
-      let product_name = match[2]?.trim();
+      const product_name = match[2]?.trim(); // 保留原样，不再清洗
       const rawPrice = match[3]?.replace(/,/g, '');
-
-      // 修正商品名（最多保留 8 字以内）
-      product_name = product_name.replace(/\s*rm\s*$/i, '').trim();
-      product_name = product_name.replace(/[^\w\u4e00-\u9fa5]/g, '').slice(0, 8);
 
       const selling_id = `B${rawId.padStart(3, '0')}`;
       const price_raw = parseFloat(rawPrice).toFixed(2);
