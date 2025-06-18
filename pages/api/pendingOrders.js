@@ -25,8 +25,10 @@ export default async function handler(req, res) {
         selling_id: data.selling_id,
         product_name: data.product_name || '',
         price_fmt: data.price_fmt || '',
+        price_raw: data.price_raw || 0,
         user_name: data.user_name || '',
-        created_at: data.created_at.toDate()
+        category: data.category || '',
+        created_at: data.created_at?.toDate?.() || null
       };
     });
 
