@@ -77,9 +77,9 @@
   <img src="/apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
-    <button class="action-button" onclick="startOrderListener()">📡 启动监听系统</button>
-    <button class="action-button" onclick="triggerOrderListener()">🛒 识别下单留言</button>
-    <button class="action-button" onclick="autoSendPaymentLinks()">➕ 自动发送付款连接</button>
+    <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
+    <button class="action-button" onclick="triggerOrderListener()">👀 识别顾客下单留言</button>
+    <button class="action-button" onclick="autoSendPaymentLinks()">📬 自动发送付款连接</button>
     <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
     <button class="action-button" onclick="exportOrders()">📤 导出订单 Excel</button>
   </div>
@@ -100,25 +100,25 @@
   </div>
 
   <script>
-    const FIXED_POST_ID = '你的贴文ID'; // 👈 替换为实际贴文 ID
+    const FIXED_POST_ID = '101411206173416_722061847440378'; // 替换为你直播的帖文 ID
 
     async function startOrderListener() {
       try {
         const res = await fetch(`/api/startOrderListener?post_id=${FIXED_POST_ID}`, { method: 'POST' });
         const data = await res.json();
-        alert('启动监听成功：' + JSON.stringify(data));
+        alert('记录商品完成：' + JSON.stringify(data));
       } catch (err) {
-        alert('启动监听失败：' + err.message);
+        alert('记录商品失败：' + err.message);
       }
     }
 
     async function triggerOrderListener() {
       try {
-        const res = await fetch(`/api/fromMakeWebhook?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch(`/api/saveVisitorOrder?post_id=${FIXED_POST_ID}`, { method: 'POST' });
         const data = await res.json();
-        alert('识别留言完成：' + JSON.stringify(data));
+        alert('识别下单完成：' + JSON.stringify(data));
       } catch (err) {
-        alert('识别留言失败：' + err.message);
+        alert('识别下单失败：' + err.message);
       }
     }
 
@@ -155,7 +155,7 @@
           <td>${order.user_name || '匿名用户'}</td>
           <td>RM ${order.price_fmt}</td>
           <td>
-            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">补发连接</button>
+            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">发送连接</button>
           </td>
         `;
         tbody.appendChild(tr);
