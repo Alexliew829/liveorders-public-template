@@ -129,7 +129,7 @@
 
     async function watchVisitorOrders() {
       try {
-        const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
+        const res = await fetch('api/saveVisitorOrder', { method: 'POST' });
         const data = await res.json();
         alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
       } catch (err) {
