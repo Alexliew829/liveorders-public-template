@@ -100,7 +100,7 @@
   </div>
 
   <script>
-    const FIXED_POST_ID = '101411206173416_722061847440378'; // 替换为你直播的帖文 ID
+    const FIXED_POST_ID = '你的贴文ID'; // 👈 替换为实际贴文 ID
 
     async function startOrderListener() {
       try {
@@ -155,7 +155,7 @@
           <td>${order.user_name || '匿名用户'}</td>
           <td>RM ${order.price_fmt}</td>
           <td>
-            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">发送连接</button>
+            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">补发连接</button>
           </td>
         `;
         tbody.appendChild(tr);
