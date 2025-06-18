@@ -77,7 +77,7 @@
 
   <div class="button-container">
     <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
-    <button class="action-button" onclick="triggerOrderListener()">👀 识别顾客下单留言</button>
+    <button class="action-button" onclick="watchVisitorOrders()">👀 识别顾客下单留言</button>
     <button class="action-button" onclick="autoSendPaymentLinks()">📬 自动发送付款连接</button>
     <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
     <button class="action-button" onclick="exportOrders()">📤 导出订单 Excel</button>
@@ -127,7 +127,7 @@
       }
     }
 
-    async function triggerOrderListener() {
+    async function watchVisitorOrders() {
       try {
         const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
         const data = await res.json();
