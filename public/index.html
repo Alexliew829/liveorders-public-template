@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>订单系统</title>
 
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Payment">
 
@@ -73,7 +73,7 @@
   </style>
 </head>
 <body>
-  <img src="/apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
     <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
@@ -103,7 +103,7 @@
 
     async function getLatestPostId() {
       try {
-        const res = await fetch('/api/getLatestPostId');
+        const res = await fetch('api/getLatestPostId');
         const data = await res.json();
         if (data.post_id) {
           latestPostId = data.post_id;
@@ -119,7 +119,7 @@
       if (!latestPostId) await getLatestPostId();
       if (!latestPostId) return;
       try {
-        const res = await fetch(`/api/startOrderListener?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch(`api/startOrderListener?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('记录商品完成：' + JSON.stringify(data));
       } catch (err) {
@@ -128,12 +128,10 @@
     }
 
     async function triggerOrderListener() {
-      if (!latestPostId) await getLatestPostId();
-      if (!latestPostId) return;
       try {
-        const res = await fetch(`/api/saveVisitorOrder?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
         const data = await res.json();
-        alert('识别下单完成：' + JSON.stringify(data));
+        alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
       } catch (err) {
         alert('识别下单失败：' + err.message);
       }
@@ -143,7 +141,7 @@
       if (!latestPostId) await getLatestPostId();
       if (!latestPostId) return;
       try {
-        const res = await fetch(`/api/sendPaymentLink?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch(`api/sendPaymentLink?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('自动发送完成：' + JSON.stringify(data));
       } catch (err) {
@@ -152,7 +150,7 @@
     }
 
     async function loadOrders() {
-      const res = await fetch('/api/pendingOrders');
+      const res = await fetch('api/pendingOrders');
       const data = await res.json();
       const tbody = document.querySelector('#orderTable tbody');
       const table = document.getElementById('orderTable');
@@ -186,7 +184,7 @@
       btn.innerText = '发送中...';
 
       try {
-        const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
+        const res = await fetch(`api/manualSend?comment_id=${commentId}`);
         const data = await res.json();
         if (data.success) {
           btn.innerText = '✅ 已发送';
@@ -202,7 +200,7 @@
 
     async function exportOrders() {
       try {
-        const res = await fetch('/api/exportOrders');
+        const res = await fetch('api/exportOrders');
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -217,8 +215,7 @@
       }
     }
 
-    // 自动在进入页面时获取最新贴文 ID
-    getLatestPostId();
+    getLatestPostId(); // 页面加载时自动执行
   </script>
 </body>
 </html>
