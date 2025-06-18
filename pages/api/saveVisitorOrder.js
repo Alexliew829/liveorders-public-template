@@ -37,13 +37,13 @@ export default async function handler(req, res) {
       return res.status(200).json({ skipped: true, reason: '管理员留言' });
     }
 
-    // 识别 A/B 标号（A001 或 B001）
+    // 识别 A/B 标号（支持空格与补0）
     const match = message.match(/\b([aAbB])[\s0]*([0-9]{1,3})\b/);
     if (!match) {
       return res.status(200).json({ skipped: true, reason: '非下单格式' });
     }
 
-    const abType = match[1].toUpperCase();
+    const abType = match[1].toUpperCase(); // A or B
     const rawId = match[2];
     const selling_id = `${abType}${rawId.padStart(3, '0')}`;
 
@@ -78,6 +78,8 @@ export default async function handler(req, res) {
       status: 'pending',
       product_name: product.product_name,
       price_fmt: product.price_fmt,
+      price_raw: parseFloat(product.price_raw || '0'),
+      category: product.category || abType,
       payment_url,
       created_at: new Date(created_time || Date.now()),
     });
