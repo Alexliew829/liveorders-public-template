@@ -31,21 +31,29 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '付款连接已发送，无需重复' });
     }
 
-    const { user_name, payment_url, product_name, price_fmt } = data;
+    const {
+      user_name,
+      payment_url,
+      product_name = '',
+      price_fmt = '',
+      selling_id = ''
+    } = data;
 
     const replyMessage = [
       user_name ? `感谢下单 @${user_name} 🙏` : `感谢您的下单 🙏`,
-      `${data.selling_id} ${product_name} RM${price_fmt}`,
+      `${selling_id} ${product_name} ${price_fmt}`,
       `付款连接：${payment_url}`,
       `⚠️ 请在 60 分钟内完成付款，逾期将取消订单 ⚠️`
     ].join('\n');
 
-    // 回复留言
-    const replyRes = await fetch(`https://graph.facebook.com/v18.0/${comment_id}/comments?access_token=${PAGE_TOKEN}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: replyMessage })
-    });
+    const replyRes = await fetch(
+      `https://graph.facebook.com/v18.0/${comment_id}/comments?access_token=${PAGE_TOKEN}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: replyMessage })
+      }
+    );
 
     const replyData = await replyRes.json();
 
@@ -53,14 +61,18 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Facebook 回复失败', detail: replyData });
     }
 
-    // 更新状态
     await docRef.update({
       replied: true,
       status: 'sent',
       sent_at: new Date()
     });
 
-    return res.status(200).json({ success: true, message: '付款连接已发送', comment_id, reply_id: replyData.id });
+    return res.status(200).json({
+      success: true,
+      message: '付款连接已发送',
+      comment_id,
+      reply_id: replyData.id
+    });
   } catch (err) {
     return res.status(500).json({ error: '服务器错误', detail: err.message });
   }
