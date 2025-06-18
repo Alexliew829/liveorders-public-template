@@ -100,8 +100,12 @@
   </div>
 
   <script>
-    const FIXED_POST_ID = '贴文ID'; // 替换为你的 Facebook 帖文 ID
-
+async function getLatestPostId() {
+  const res = await fetch('/api/getLatestPostId');
+  const data = await res.json();
+  return data.post_id;
+}
+  
     async function startOrderListener() {
       try {
         const res = await fetch(`/api/startOrderListener?post_id=${FIXED_POST_ID}`, { method: 'POST' });
