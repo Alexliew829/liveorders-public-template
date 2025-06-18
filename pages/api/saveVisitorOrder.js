@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     const ordersRef = db.collection('orders');
 
     if (matched.selling_id.toUpperCase().startsWith('B')) {
-      // B 类：限制一人下单
+      // B 类：限制一人下单（仅允许第一位）
       const bQuery = await ordersRef
         .where('selling_id', '==', matched.selling_id)
         .limit(1)
@@ -54,17 +54,7 @@ export default async function handler(req, res) {
       }
     }
 
-    if (matched.selling_id.toUpperCase().startsWith('A')) {
-      // A 类：防止同一顾客重复留言
-      const aQuery = await ordersRef
-        .where('selling_id', '==', matched.selling_id)
-        .where('user_id', '==', from_id)
-        .limit(1)
-        .get();
-      if (!aQuery.empty) {
-        return res.status(200).json({ success: false, reason: '同一顾客已下单该 A 类商品' });
-      }
-    }
+    // A 类无需限制重复下单，允许多个顾客（或同一顾客）重复留言
 
     const price_fmt = Number(matched.price || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
