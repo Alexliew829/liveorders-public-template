@@ -41,7 +41,6 @@
     .action-button:hover {
       background-color: #1a6f1a;
     }
-
     #orderSection {
       margin-top: 50px;
       padding: 0 20px;
@@ -100,15 +99,27 @@
   </div>
 
   <script>
-async function getLatestPostId() {
-  const res = await fetch('/api/getLatestPostId');
-  const data = await res.json();
-  return data.post_id;
-}
-  
-    async function startOrderListener() {
+    let latestPostId = '';
+
+    async function getLatestPostId() {
       try {
-        const res = await fetch(`/api/startOrderListener?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch('/api/getLatestPostId');
+        const data = await res.json();
+        if (data.post_id) {
+          latestPostId = data.post_id;
+        } else {
+          alert('无法获取最新贴文 ID：' + JSON.stringify(data));
+        }
+      } catch (err) {
+        alert('获取贴文 ID 失败：' + err.message);
+      }
+    }
+
+    async function startOrderListener() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
+      try {
+        const res = await fetch(`/api/startOrderListener?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('记录商品完成：' + JSON.stringify(data));
       } catch (err) {
@@ -117,8 +128,10 @@ async function getLatestPostId() {
     }
 
     async function triggerOrderListener() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
       try {
-        const res = await fetch(`/api/manualTriggerOrders?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch(`/api/saveVisitorOrder?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('识别下单完成：' + JSON.stringify(data));
       } catch (err) {
@@ -127,8 +140,10 @@ async function getLatestPostId() {
     }
 
     async function autoSendPaymentLinks() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
       try {
-        const res = await fetch(`/api/sendPaymentLink?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch(`/api/sendPaymentLink?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('自动发送完成：' + JSON.stringify(data));
       } catch (err) {
@@ -201,6 +216,9 @@ async function getLatestPostId() {
         alert('导出失败: ' + err.message);
       }
     }
+
+    // 自动在进入页面时获取最新贴文 ID
+    getLatestPostId();
   </script>
 </body>
 </html>
