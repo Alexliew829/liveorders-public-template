@@ -12,73 +12,78 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
+  const { message, from_id, from_name, comment_id, post_id, created_time } = req.body || {};
+  if (!message || !from_id || !comment_id || !post_id) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
   try {
-    const { message, from_id, from_name, comment_id, post_id, created_time } = req.body;
-    if (!message || !from_id || !comment_id || !post_id) {
-      return res.status(400).json({ error: '缺少必要字段' });
+    // 获取所有商品
+    const productsRef = db.collection('live_products');
+    const snapshot = await productsRef.where('post_id', '==', post_id).get();
+    if (snapshot.empty) {
+      return res.status(404).json({ error: '未找到商品数据' });
     }
 
-    // 从商品表查出匹配的商品编号
-    const productsSnap = await db.collection('live_products').get();
-    const products = [];
-    productsSnap.forEach(doc => {
-      const data = doc.data();
-      products.push({ id: doc.id, ...data });
+    const productList = [];
+    snapshot.forEach(doc => {
+      const item = doc.data();
+      const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
+      if (id) {
+        productList.push({ ...item, id });
+      }
     });
 
-    // 判断留言中有没有包含商品编号
-    const lowerMsg = message.toLowerCase();
-    const matched = products.find(p => {
-      const pattern = new RegExp(`\\b${p.selling_id.replace(/\s+/g, '').toLowerCase()}\\b`);
-      return pattern.test(lowerMsg);
-    });
+    const messageText = message.toLowerCase().replace(/\s+/g, '');
+    const matched = productList.find(p => messageText.includes(p.id));
 
     if (!matched) {
-      return res.status(200).json({ success: false, message: '未匹配到任何商品编号' });
+      return res.status(200).json({ success: false, reason: '留言中无商品编号' });
     }
 
-    const { selling_id, product_name, price, type = 'B' } = matched;
-    const price_fmt = Number(price).toLocaleString('en-MY', { minimumFractionDigits: 2 });
+    const ordersRef = db.collection('orders');
 
-    const orderRef = db.collection('visitor_orders');
-
-    if (type === 'B') {
-      // 限购一次，只写入第一个订单
-      const existing = await orderRef.where('selling_id', '==', selling_id).limit(1).get();
-      if (!existing.empty) {
-        return res.status(200).json({ success: false, message: 'B类商品已有订单' });
+    if (matched.selling_id.toUpperCase().startsWith('B')) {
+      // B 类：限制一人下单
+      const bQuery = await ordersRef
+        .where('selling_id', '==', matched.selling_id)
+        .limit(1)
+        .get();
+      if (!bQuery.empty) {
+        return res.status(200).json({ success: false, reason: 'B类商品已被抢先下单' });
       }
     }
 
-    if (type === 'A') {
-      // 同一顾客不能重复下单相同商品
-      const duplicate = await orderRef
-        .where('selling_id', '==', selling_id)
+    if (matched.selling_id.toUpperCase().startsWith('A')) {
+      // A 类：防止同一顾客重复留言
+      const aQuery = await ordersRef
+        .where('selling_id', '==', matched.selling_id)
         .where('user_id', '==', from_id)
         .limit(1)
         .get();
-      if (!duplicate.empty) {
-        return res.status(200).json({ success: false, message: 'A类重复下单' });
+      if (!aQuery.empty) {
+        return res.status(200).json({ success: false, reason: '同一顾客已下单该 A 类商品' });
       }
     }
 
-    // 写入订单
-    await orderRef.add({
-      selling_id,
-      product_name,
-      price,
-      price_fmt,
-      user_id: from_id,
-      user_name: from_name || '',
+    const price_fmt = Number(matched.price || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 });
+
+    await ordersRef.add({
       comment_id,
       post_id,
+      user_id: from_id,
+      user_name: from_name || '',
+      selling_id: matched.selling_id,
+      product_name: matched.product_name || '',
+      price: matched.price || 0,
+      price_fmt,
       created_time,
-      replied: false
+      replied: false,
     });
 
     return res.status(200).json({ success: true });
   } catch (err) {
-    console.error('[写入订单失败]', err);
-    return res.status(500).json({ error: '写入失败', detail: err.message });
+    console.error('写入订单失败:', err);
+    return res.status(500).json({ error: '写入订单失败', detail: err.message });
   }
 }
