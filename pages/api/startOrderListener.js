@@ -1,4 +1,3 @@
-// pages/api/startOrderListener.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -20,73 +19,73 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新帖文 ID
+    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
 
     if (!post_id) {
-      return res.status(404).json({ error: '未获取到帖文 ID', raw: postData });
+      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    if (isDebug) {
-      return res.status(200).json({ debug: true, post_id, message: '获取成功，可执行监听操作' });
+    // 获取留言
+    const allComments = [];
+    let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
+
+    while (nextPage) {
+      const res = await fetch(nextPage);
+      const data = await res.json();
+      allComments.push(...(data.data || []));
+      nextPage = data.paging?.next || null;
     }
 
-    // 抓取留言（8 小时内）
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`);
-    const commentData = await commentRes.json();
+    let writeCount = 0;
 
-    if (!commentData?.data?.length) {
-      return res.status(404).json({ error: '找不到任何留言', raw: commentData });
-    }
+    for (const comment of allComments) {
+      const message = comment.message || '';
 
-    let successCount = 0;
-
-    for (const comment of commentData.data) {
-      const { message, from, id: comment_id, created_time } = comment;
-      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页留言
-
-      const now = new Date();
-      const createdAt = new Date(created_time);
-      if (now - createdAt > 8 * 60 * 60 * 1000) continue; // 限制 8 小时内留言
-
-      // 识别 A 或 B 商品编号
-      const regex = /\b([aAbB])\s*0*([0-9]{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/;
-      const match = message.match(regex);
+      // 支持灵活格式的商品识别：A/B + 编号 + 名称 + RM价格
+      const match = message.match(/\b([ab])\s*0*(\d{1,3})\b[\s\-~_]*([^\n\r]*?)\s*rm\s*([\d,\.kK]+)/i);
       if (!match) continue;
 
-      const abType = match[1].toUpperCase(); // A or B
-      const rawId = match[2];
-      const product_name = match[3].trim();
-      const rawPrice = match[4].replace(/,/g, '');
-
-      const selling_id = `${abType}${rawId.padStart(3, '0')}`;
-      const price_raw = parseFloat(rawPrice).toFixed(2);
-      const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
+      const category = match[1].toUpperCase(); // A / B
+      const idNumber = match[2].padStart(3, '0'); // 补齐编号
+      const name = match[3].trim();
+      const rawPrice = match[4].toLowerCase();
+      const numericPrice = rawPrice.includes('k')
+        ? parseFloat(rawPrice) * 1000
+        : parseFloat(rawPrice.replace(/,/g, ''));
+      const formattedPrice = numericPrice.toLocaleString('en-MY', {
+        style: 'currency',
+        currency: 'MYR',
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
       });
 
-      const allow_multiple = abType === 'A';
+      const selling_id = `${category}${idNumber}`;
 
       const docRef = db.collection('live_products').doc(selling_id);
+      const existing = await docRef.get();
+      if (existing.exists) continue;
+
       await docRef.set({
         selling_id,
+        name,
+        price: formattedPrice,
         post_id,
-        product_name,
-        price_raw,
-        price_fmt,
-        comment_id,
-        created_at: new Date(),
-        allow_multiple,
+        created_at: new Date().toISOString(),
+        category,
       });
 
-      successCount++;
+      writeCount++;
     }
 
-    return res.status(200).json({ success: true, inserted: successCount });
+    res.status(200).json({
+      status: 'success',
+      message: `成功写入 ${writeCount} 项商品`,
+      post_id,
+    });
   } catch (err) {
-    return res.status(500).json({ error: '服务器错误', detail: err.message });
+    console.error('写入商品失败：', err);
+    res.status(500).json({ error: '服务器内部错误', details: err.message });
   }
 }
