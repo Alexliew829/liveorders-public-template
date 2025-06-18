@@ -1,91 +1,221 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>订单系统</title>
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-const PAGE_ID = process.env.PAGE_ID;
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Payment">
 
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-
-const db = getFirestore();
-const ADMIN_IDS = [PAGE_ID]; // 可加入更多管理员 ID
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: '只允许 POST 请求' });
-  }
-
-  try {
-    const {
-      message,
-      from_id,
-      from_name,
-      comment_id,
-      post_id,
-      created_time
-    } = req.body;
-
-    if (!message || !from_id || !comment_id || !post_id) {
-      return res.status(400).json({ error: '缺少必要字段', raw: req.body });
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      padding-top: 60px;
     }
-
-    if (ADMIN_IDS.includes(from_id)) {
-      return res.status(200).json({ skipped: true, reason: '管理员留言' });
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
     }
-
-    const match = message.match(/\b([aAbB])[\s0]*([0-9]{1,3})\b/);
-    if (!match) {
-      return res.status(200).json({ skipped: true, reason: '非下单格式' });
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
     }
-
-    const abType = match[1].toUpperCase();
-    const rawId = match[2];
-    const selling_id = `${abType}${rawId.padStart(3, '0')}`;
-
-    const productSnap = await db.collection('live_products').doc(selling_id).get();
-    if (!productSnap.exists) {
-      return res.status(200).json({ skipped: true, reason: '找不到商品' });
+    .action-button {
+      padding: 18px 32px;
+      font-size: 20px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+    #orderSection {
+      margin-top: 50px;
+      padding: 0 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 30px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background-color: #eee;
+    }
+    .small-btn {
+      padding: 6px 12px;
+      font-size: 14px;
+      background-color: #228B22;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .small-btn:hover {
+      background-color: #1a6f1a;
+    }
+  </style>
+</head>
+<body>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
-    const product = productSnap.data();
+  <div class="button-container">
+    <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
+    <button class="action-button" onclick="watchVisitorOrders()">👀 识别顾客下单留言</button>
+    <button class="action-button" onclick="autoSendPaymentLinks()">📬 自动发送付款连接</button>
+    <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
+    <button class="action-button" onclick="exportOrders()">📤 导出订单 Excel</button>
+  </div>
 
-    // B 类商品仅限一人
-    if (!product.allow_multiple) {
-      const existing = await db.collection('triggered_comments')
-        .where('selling_id', '==', selling_id)
-        .get();
-      if (!existing.empty) {
-        return res.status(200).json({ skipped: true, reason: '已有顾客下单' });
+  <div id="orderSection">
+    <table id="orderTable" style="display:none">
+      <thead>
+        <tr>
+          <th>编号</th>
+          <th>商品名</th>
+          <th>顾客</th>
+          <th>金额</th>
+          <th>动作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let latestPostId = '';
+
+    async function getLatestPostId() {
+      try {
+        const res = await fetch('api/getLatestPostId');
+        const data = await res.json();
+        if (data.post_id) {
+          latestPostId = data.post_id;
+        } else {
+          alert('无法获取最新贴文 ID：' + JSON.stringify(data));
+        }
+      } catch (err) {
+        alert('获取贴文 ID 失败：' + err.message);
       }
     }
 
-    const shortId = comment_id.slice(-6);
-    const payment_url = `https://pay.example.com/${selling_id}-${shortId}`;
+    async function startOrderListener() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
+      try {
+        const res = await fetch(`api/startOrderListener?post_id=${latestPostId}`, { method: 'POST' });
+        const data = await res.json();
+        alert('记录商品完成：' + JSON.stringify(data));
+      } catch (err) {
+        alert('记录商品失败：' + err.message);
+      }
+    }
 
-    await db.collection('triggered_comments').doc(comment_id).set({
-      selling_id,
-      post_id,
-      comment_id,
-      user_id: from_id,
-      user_name: from_name || '',
-      replied: false,
-      status: 'pending',
-      product_name: product.product_name,
-      price_fmt: product.price_fmt,
-      price_raw: parseFloat(product.price_raw || '0'),
-      category: product.category || abType,
-      payment_url,
-      created_at: new Date(created_time || Date.now()),
-    });
+    async function watchVisitorOrders() {
+      try {
+        const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
+        const data = await res.json();
+        alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
+      } catch (err) {
+        alert('识别下单失败：' + err.message);
+      }
+    }
 
-    return res.status(200).json({
-      success: true,
-      message: '顾客下单记录成功写入',
-      selling_id,
-      user: from_name
-    });
-  } catch (err) {
-    return res.status(500).json({ error: '服务器错误', detail: err.message });
-  }
-}
+    async function autoSendPaymentLinks() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
+      try {
+        const res = await fetch(`api/sendPaymentLink?post_id=${latestPostId}`, { method: 'POST' });
+        const data = await res.json();
+        alert('自动发送完成：' + JSON.stringify(data));
+      } catch (err) {
+        alert('自动发送失败：' + err.message);
+      }
+    }
+
+    async function loadOrders() {
+      const res = await fetch('api/pendingOrders');
+      const data = await res.json();
+      const tbody = document.querySelector('#orderTable tbody');
+      const table = document.getElementById('orderTable');
+      table.style.display = 'table';
+      tbody.innerHTML = '';
+
+      if (!data.orders || data.orders.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="5">目前没有待发订单</td>';
+        tbody.appendChild(row);
+        return;
+      }
+
+      data.orders.forEach(order => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${order.selling_id}</td>
+          <td>${order.product_name}</td>
+          <td>${order.user_name || '匿名用户'}</td>
+          <td>RM ${order.price_fmt}</td>
+          <td>
+            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">发送连接</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function sendPayment(commentId, btn) {
+      btn.disabled = true;
+      btn.innerText = '发送中...';
+
+      try {
+        const res = await fetch(`api/manualSend?comment_id=${commentId}`);
+        const data = await res.json();
+        if (data.success) {
+          btn.innerText = '✅ 已发送';
+        } else {
+          btn.innerText = '❌ 失败';
+          alert('发送失败: ' + (data.message || JSON.stringify(data)));
+        }
+      } catch (err) {
+        btn.innerText = '❌ 异常';
+        alert('错误: ' + err.message);
+      }
+    }
+
+    async function exportOrders() {
+      try {
+        const res = await fetch('api/exportOrders');
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '已付款订单.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('导出失败: ' + err.message);
+      }
+    }
+
+    getLatestPostId(); // 页面加载时自动执行
+  </script>
+</body>
+</html>
