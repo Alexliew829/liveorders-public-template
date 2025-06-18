@@ -44,18 +44,20 @@ export default async function handler(req, res) {
     for (const comment of allComments) {
       const message = comment.message || '';
 
-      // 支持灵活格式的商品识别：A/B + 编号 + 名称 + RM价格
+      // 支持 B001 / b 001 / a88 / A 08 / b012 RM1.2k 等变体
       const match = message.match(/\b([ab])\s*0*(\d{1,3})\b[\s\-~_]*([^\n\r]*?)\s*rm\s*([\d,\.kK]+)/i);
       if (!match) continue;
 
-      const category = match[1].toUpperCase(); // A / B
-      const idNumber = match[2].padStart(3, '0'); // 补齐编号
-      const name = match[3].trim();
+      const category = match[1].toUpperCase(); // A or B
+      const idNumber = match[2].padStart(3, '0'); // 补足为三位
+      const product_name = match[3].trim(); // 商品名
       const rawPrice = match[4].toLowerCase();
+
       const numericPrice = rawPrice.includes('k')
         ? parseFloat(rawPrice) * 1000
         : parseFloat(rawPrice.replace(/,/g, ''));
-      const formattedPrice = numericPrice.toLocaleString('en-MY', {
+
+      const price_fmt = numericPrice.toLocaleString('en-MY', {
         style: 'currency',
         currency: 'MYR',
         minimumFractionDigits: 2,
@@ -69,11 +71,13 @@ export default async function handler(req, res) {
 
       await docRef.set({
         selling_id,
-        name,
-        price: formattedPrice,
+        product_name,
+        price_raw: numericPrice,
+        price_fmt,
         post_id,
-        created_at: new Date().toISOString(),
+        comment_id: comment.id,
         category,
+        created_at: new Date().toISOString(),
       });
 
       writeCount++;
