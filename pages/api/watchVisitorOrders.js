@@ -53,17 +53,21 @@ export default async function handler(req, res) {
         created_time
       };
 
-      const saveRes = await fetch(`${req.headers.origin || 'https://your.vercel.app'}/api/saveVisitorOrder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      try {
+        const saveRes = await fetch(`${req.headers.origin || 'https://your.vercel.app'}/api/saveVisitorOrder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (saveRes.ok) {
-        const result = await saveRes.json();
-        if (result.success) success++;
-        else skipped++;
-      } else {
+        if (saveRes.ok) {
+          const result = await saveRes.json().catch(() => ({})); // 防止 JSON 错误导致中断
+          if (result.success) success++;
+          else skipped++;
+        } else {
+          failed++;
+        }
+      } catch (err) {
         failed++;
       }
     }
