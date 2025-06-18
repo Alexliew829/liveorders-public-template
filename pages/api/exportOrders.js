@@ -38,12 +38,13 @@ export default async function handler(req, res) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '订单');
 
-    const buffer = writeToBuffer(workbook);
+    const buffer = await writeToBuffer(workbook); // ✅ 关键 await
 
     res.setHeader('Content-Disposition', 'attachment; filename="orders.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.status(200).send(buffer);
   } catch (err) {
+    console.error('[导出失败]', err); // ✅ 可选增强
     res.status(500).json({ error: '导出失败', detail: err.message });
   }
 }
