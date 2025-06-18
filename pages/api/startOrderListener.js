@@ -20,7 +20,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -33,7 +32,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ debug: true, post_id, message: '获取成功，可执行监听操作' });
     }
 
-    // 获取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=message,from,id,created_time&limit=100`);
     const commentData = await commentRes.json();
 
@@ -45,22 +43,23 @@ export default async function handler(req, res) {
 
     for (const comment of commentData.data) {
       const { message, from, id: comment_id, created_time } = comment;
-      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页留言
+      if (!message || !from || from.id !== PAGE_ID) continue;
 
       const now = new Date();
       const createdAt = new Date(created_time);
-      if (now - createdAt > 30 * 60 * 1000) continue; // 30分钟限制
+      if (now - createdAt > 30 * 60 * 1000) continue;
 
-      // 宽容格式：B001 商品名 RM1234.56
-      const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/i;
+      // 支持 A/B 编号
+      const regex = /([ABab])\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/i;
       const match = message.match(regex);
       if (!match) continue;
 
-      const rawId = match[1];
-      const product_name = match[2]?.trim(); // 保留原样，不再清洗
-      const rawPrice = match[3]?.replace(/,/g, '');
+      const abType = match[1].toUpperCase();
+      const rawId = match[2];
+      const product_name = match[3]?.trim();
+      const rawPrice = match[4]?.replace(/,/g, '');
 
-      const selling_id = `B${rawId.padStart(3, '0')}`;
+      const selling_id = `${abType}${rawId.padStart(3, '0')}`;
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
         minimumFractionDigits: 2,
@@ -76,6 +75,7 @@ export default async function handler(req, res) {
         price_fmt,
         comment_id,
         created_at: new Date(),
+        allow_multiple: abType === 'A'  // A类允许多下单
       });
 
       successCount++;
