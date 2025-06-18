@@ -100,7 +100,7 @@
   </div>
 
   <script>
-    const FIXED_POST_ID = '贴文ID'; // 替换为你的帖文 ID，如 101411206173416_722061847440378
+    const FIXED_POST_ID = '贴文ID'; // 替换为你的 Facebook 帖文 ID
 
     async function startOrderListener() {
       try {
@@ -114,7 +114,7 @@
 
     async function triggerOrderListener() {
       try {
-        const res = await fetch(`/api/saveVisitorOrder?post_id=${FIXED_POST_ID}`, { method: 'POST' });
+        const res = await fetch(`/api/manualTriggerOrders?post_id=${FIXED_POST_ID}`, { method: 'POST' });
         const data = await res.json();
         alert('识别下单完成：' + JSON.stringify(data));
       } catch (err) {
