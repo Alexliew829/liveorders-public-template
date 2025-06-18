@@ -17,7 +17,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -25,7 +24,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 获取所有留言
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -36,13 +34,11 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
-    // 遍历留言并调用 saveVisitorOrder
     let success = 0, skipped = 0, failed = 0;
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      // 跳过管理员留言
       if (from?.id === PAGE_ID) {
         skipped++;
         continue;
@@ -57,7 +53,7 @@ export default async function handler(req, res) {
         created_time
       };
 
-      const saveRes = await fetch(`${req.headers.origin || 'https://你的域名.vercel.app'}/api/saveVisitorOrder`, {
+      const saveRes = await fetch(`${req.headers.origin || 'https://your.vercel.app'}/api/saveVisitorOrder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
