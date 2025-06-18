@@ -49,26 +49,23 @@ export default async function handler(req, res) {
 
       const now = new Date();
       const createdAt = new Date(created_time);
-      if (now - createdAt > 30 * 60 * 1000) continue; // 30分钟限制
+      if (now - createdAt > 8 * 60 * 60 * 1000) continue; // 允许最多 8 小时内的留言
 
-      // 宽容格式：B001 商品名 RM1234.56 或 A001 商品名 RM1234.56
-      const regex = /([AaBb])\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/i;
+      // 宽容格式：B001 商品名 RM1234.56
+      const regex = /[Bb]\s*0*(\d{1,3})\s+(.+?)\s+(?:RM|rm)?\s*([\d,.]+)/i;
       const match = message.match(regex);
       if (!match) continue;
 
-      const abType = match[1].toUpperCase();
-      const rawId = match[2];
-      const product_name = match[3]?.trim(); // 保留原样
-      const rawPrice = match[4]?.replace(/,/g, '');
+      const rawId = match[1];
+      const product_name = match[2]?.trim();
+      const rawPrice = match[3]?.replace(/,/g, '');
 
-      const selling_id = `${abType}${rawId.padStart(3, '0')}`;
+      const selling_id = `B${rawId.padStart(3, '0')}`;
       const price_raw = parseFloat(rawPrice).toFixed(2);
       const price_fmt = parseFloat(rawPrice).toLocaleString('en-MY', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-
-      const allow_multiple = abType === 'A'; // A类可多人下单，B类限一人
 
       const docRef = db.collection('live_products').doc(selling_id);
       await docRef.set({
@@ -78,7 +75,6 @@ export default async function handler(req, res) {
         price_raw,
         price_fmt,
         comment_id,
-        allow_multiple,
         created_at: new Date(),
       });
 
