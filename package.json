@@ -1,8 +1,15 @@
-"dependencies": {
-  "firebase-admin": "^11.10.1",
-  "next": "14.2.3",
-  "react": "18.2.0",
-  "react-dom": "18.2.0",
-  "@supabase/supabase-js": "^2.39.7",
-  "xlsx": "^0.18.5"
+{
+  "name": "liveorders",
+  "version": "0.1.0",
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "next": "14.2.3",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {
+    "build": "next build",
+    "vercel-build": "next build"
+  }
 }
