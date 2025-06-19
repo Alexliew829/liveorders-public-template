@@ -25,6 +25,13 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
+    // 删除旧订单
+    const ordersRef = db.collection('orders');
+    const oldOrders = await ordersRef.where('post_id', '==', post_id).get();
+    const batch = db.batch();
+    oldOrders.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -35,7 +42,9 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
-    let success = 0, skipped = 0, failed = 0;
+    let success = 0,
+      skipped = 0,
+      failed = 0;
 
     const productsRef = db.collection('live_products');
     const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
@@ -48,18 +57,20 @@ export default async function handler(req, res) {
       }
     });
 
-    const ordersRef = db.collection('orders');
-
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (from?.id === PAGE_ID) {
+      if (!message || !from || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
 
       const messageText = message.toLowerCase().replace(/\s+/g, '');
-      const matched = productList.find((p) => messageText.includes(p.id));
+
+      const matched = productList.find((p) => {
+        const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
+        return pattern.test(messageText);
+      });
 
       if (!matched) {
         skipped++;
@@ -67,7 +78,10 @@ export default async function handler(req, res) {
       }
 
       try {
-        if (matched.category === 'B') {
+        const isB = matched.category?.toUpperCase() === 'B';
+        const isA = matched.category?.toUpperCase() === 'A';
+
+        if (isB) {
           const bQuery = await ordersRef
             .where('selling_id', '==', matched.selling_id)
             .limit(1)
@@ -78,7 +92,17 @@ export default async function handler(req, res) {
           }
         }
 
-        // A 类不限制重复留言
+        if (isA) {
+          const aQuery = await ordersRef
+            .where('selling_id', '==', matched.selling_id)
+            .where('user_id', '==', from.id)
+            .limit(1)
+            .get();
+          if (!aQuery.empty) {
+            skipped++;
+            continue;
+          }
+        }
 
         const price_raw = Number(matched.price || matched.price_raw || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
@@ -86,8 +110,8 @@ export default async function handler(req, res) {
         await ordersRef.add({
           comment_id,
           post_id,
-          user_id: from?.id || '',
-          user_name: from?.name || '',
+          user_id: from.id,
+          user_name: from.name || '',
           selling_id: matched.selling_id,
           product_name: matched.product_name || '',
           category: matched.category || '',
