@@ -2,6 +2,9 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+const PAGE_ID = process.env.PAGE_ID;
+const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
+
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
@@ -12,77 +15,107 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
-  const { message, from_id, from_name, comment_id, post_id, created_time } = req.body || {};
-  if (!message || !from_id || !comment_id || !post_id) {
-    return res.status(400).json({ error: '缺少必要字段' });
-  }
-
   try {
-    const productsRef = db.collection('live_products');
-    const snapshot = await productsRef.where('post_id', '==', post_id).get();
-    if (snapshot.empty) {
-      return res.status(404).json({ error: '未找到商品数据' });
+    // 获取最新贴文 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+    const postData = await postRes.json();
+    const post_id = postData?.data?.[0]?.id;
+    if (!post_id) {
+      return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
+    // 抓留言
+    const allComments = [];
+    let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
+
+    while (nextPage) {
+      const r = await fetch(nextPage);
+      const data = await r.json();
+      allComments.push(...(data.data || []));
+      nextPage = data.paging?.next || null;
+    }
+
+    // 获取所有商品（属于该贴文的）
+    const productsRef = db.collection('live_products');
+    const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
     const productList = [];
-    snapshot.forEach(doc => {
+    productSnapshot.forEach(doc => {
       const item = doc.data();
       const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
-      if (id) {
-        productList.push({ ...item, id });
-      }
+      if (id) productList.push({ ...item, id });
     });
-
-    const messageText = message.toLowerCase().replace(/\s+/g, '');
-    const matched = productList.find(p => messageText.includes(p.id));
-
-    if (!matched) {
-      return res.status(200).json({ success: false, reason: '留言中无商品编号' });
-    }
 
     const ordersRef = db.collection('orders');
+    let success = 0, skipped = 0, failed = 0;
 
-    if (matched.category === 'B') {
-      const bQuery = await ordersRef
-        .where('selling_id', '==', matched.selling_id)
-        .limit(1)
-        .get();
-      if (!bQuery.empty) {
-        return res.status(200).json({ success: false, reason: 'B类商品已被抢先下单' });
+    for (const comment of allComments) {
+      const { id: comment_id, message, from, created_time } = comment;
+      if (!message || !from?.id || !comment_id) {
+        skipped++;
+        continue;
+      }
+
+      const messageText = message.toLowerCase().replace(/\s+/g, '');
+      const matched = productList.find(p => messageText.includes(p.id));
+      if (!matched) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        if (matched.category === 'B') {
+          const bQuery = await ordersRef.where('selling_id', '==', matched.selling_id).limit(1).get();
+          if (!bQuery.empty) {
+            skipped++;
+            continue;
+          }
+        }
+
+        if (matched.category === 'A') {
+          const aQuery = await ordersRef
+            .where('selling_id', '==', matched.selling_id)
+            .where('user_id', '==', from.id)
+            .limit(1)
+            .get();
+          if (!aQuery.empty) {
+            skipped++;
+            continue;
+          }
+        }
+
+        const price_raw = Number(matched.price || 0);
+        const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+
+        await ordersRef.add({
+          comment_id,
+          post_id,
+          user_id: from.id,
+          user_name: from.name || '',
+          selling_id: matched.selling_id,
+          product_name: matched.product_name || '',
+          category: matched.category || '',
+          price: price_raw,
+          price_fmt,
+          created_time,
+          replied: false,
+        });
+
+        success++;
+      } catch (err) {
+        failed++;
       }
     }
 
-    if (matched.category === 'A') {
-      const aQuery = await ordersRef
-        .where('selling_id', '==', matched.selling_id)
-        .where('user_id', '==', from_id)
-        .limit(1)
-        .get();
-      if (!aQuery.empty) {
-        return res.status(200).json({ success: false, reason: '同一顾客已下单该 A 类商品' });
-      }
-    }
-
-    const price_raw = Number(matched.price || 0);
-    const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
-    await ordersRef.add({
-      comment_id,
+    return res.status(200).json({
+      message: '识别完成',
       post_id,
-      user_id: from_id,
-      user_name: from_name || '',
-      selling_id: matched.selling_id,
-      product_name: matched.product_name || '',
-      category: matched.category || '',
-      price: price_raw,
-      price_fmt,
-      created_time,
-      replied: false,
+      success,
+      skipped,
+      failed,
+      total: allComments.length
     });
-
-    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error('写入订单失败:', err);
-    return res.status(500).json({ error: '写入订单失败', detail: err.message });
+    console.error('[识别留言失败]', err);
+    return res.status(500).json({ error: '识别失败', detail: err.message });
   }
 }
