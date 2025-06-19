@@ -115,23 +115,21 @@
       }
     }
 
-    async function watchVisitorOrders() {
-  try {
-    const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
-    const data = await res.json();
-    alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
-  } catch (err) {
-    alert('识别下单失败：' + err.message);
-  }
-}
+    async function startOrderListener() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
+      try {
+        const res = await fetch(`api/startOrderListener?post_id=${latestPostId}`, { method: 'POST' });
+        const data = await res.json();
+        alert('记录商品完成：' + JSON.stringify(data));
+      } catch (err) {
+        alert('记录商品失败：' + err.message);
       }
     }
 
     async function watchVisitorOrders() {
-      if (!latestPostId) await getLatestPostId();
-      if (!latestPostId) return;
       try {
-        const res = await fetch(`api/watchVisitorOrders?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
         const data = await res.json();
         alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
       } catch (err) {
