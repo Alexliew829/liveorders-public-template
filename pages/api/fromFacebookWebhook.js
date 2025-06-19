@@ -16,64 +16,70 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body;
-    const entry = body.entry?.[0];
-    const change = entry?.changes?.[0];
-    const comment = change?.value;
+    const entries = body.entry || [];
 
-    if (!comment || comment.verb !== 'add' || !comment.message) {
-      return res.status(200).json({ message: '无效留言，忽略' });
-    }
+    let success = 0, skipped = 0;
 
-    const { post_id, comment_id, created_time, from, message } = comment;
-    if (!from || from.id === PAGE_ID) {
-      return res.status(200).json({ message: '跳过主页留言' });
-    }
+    for (const entry of entries) {
+      const changes = entry.changes || [];
+      for (const change of changes) {
+        const value = change.value;
+        const comment = value.comment;
+        if (!comment) {
+          skipped++;
+          continue;
+        }
 
-    const cleanMessage = message.toUpperCase().replace(/\s+/g, '');
-    const match = cleanMessage.match(/\b([AB])(\d{1,4})\b/);
-    if (!match) {
-      return res.status(200).json({ message: '无有效编号，跳过' });
-    }
+        const { id: comment_id, message, created_time, from, post_id } = comment;
 
-    const prefix = match[1];
-    const number = match[2].padStart(3, '0');
-    const selling_id = `${prefix}${number}`;
+        // 忽略主页留言
+        if (!from || from.id === PAGE_ID) {
+          skipped++;
+          continue;
+        }
 
-    const productSnap = await db.collection('live_products').doc(selling_id).get();
-    if (!productSnap.exists) {
-      return res.status(200).json({ message: `编号 ${selling_id} 不存在于产品表` });
-    }
+        // 写入 debug_comments（调试用）
+        await db.collection('debug_comments').add({
+          comment_id,
+          message,
+          from,
+          created_time,
+          post_id
+        });
 
-    const product = productSnap.data();
-    const isB = product.category === 'B';
+        // 写入 triggered_comments
+        const selling_idMatch = message?.toUpperCase().match(/B\s*\d{1,3}/);
+        if (!selling_idMatch) {
+          skipped++;
+          continue;
+        }
 
-    if (isB) {
-      const existing = await db
-        .collection('triggered_comments')
-        .where('selling_id', '==', selling_id)
-        .get();
-      if (!existing.empty) {
-        return res.status(200).json({ message: `B 类商品 ${selling_id} 已有留言者，跳过` });
+        const selling_id = 'B' + selling_idMatch[0].replace(/\D/g, '').padStart(3, '0');
+
+        await db.collection('triggered_comments').add({
+          comment_id,
+          created_at: created_time,
+          from,
+          post_id,
+          selling_id,
+          status: 'pending',
+          replied: false,
+          sent_at: '',
+          product_name: '',
+          price: 0,
+          price_fmt: '',
+          user_id: from.id || '',
+          user_name: from.name || '',
+          category: 'B'
+        });
+
+        success++;
       }
     }
 
-    await db.collection('triggered_comments').add({
-      comment_id,
-      post_id,
-      created_at: new Date().toISOString(),
-      selling_id,
-      category: product.category,
-      product_name: product.product_name || '',
-      price: product.price || 0,
-      price_fmt: product.price_fmt || '',
-      replied: false,
-      user_id: from.id,
-      user_name: from.name || '',
-    });
-
-    return res.status(200).json({ message: `✅ 已记录访客留言 ${selling_id}` });
+    return res.status(200).json({ message: '识别完成', success, skipped });
   } catch (err) {
-    console.error('❌ Webhook 错误:', err);
-    return res.status(500).json({ error: 'Webhook 处理失败', detail: err.message });
+    console.error('Webhook 错误：', err);
+    return res.status(500).json({ error: '处理失败', detail: err.message });
   }
 }
