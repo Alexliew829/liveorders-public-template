@@ -45,67 +45,48 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
-    const productSnapshot = await db.collection('live_products').where('post_id', '==', post_id).get();
-    const productMap = new Map();
-
-    productSnapshot.forEach((doc) => {
-      const item = doc.data();
-      const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
-      if (id && !productMap.has(id)) {
-        productMap.set(id, item);
-      }
-    });
-
-    const recorded = new Set();
+    const matchedIds = new Set();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (!message || !from?.id || from.id === PAGE_ID) {
+      if (!message || !from || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
 
-      const messageText = message.toLowerCase().replace(/\s+/g, '');
-      const match = messageText.match(/\b([ab])0{0,2}(\d{1,3})\b/i);
+      const cleanMessage = message.toUpperCase().replace(/\s+/g, '');
+      const match = cleanMessage.match(/\bB(\d{1,3})\b/);
 
       if (!match) {
         skipped++;
         continue;
       }
 
-      const selling_id = `${match[1].toUpperCase()}${match[2]}`;
+      const selling_id = `B${match[1].padStart(3, '0')}`; // 标准格式为 B+三位数字
 
-      if (recorded.has(selling_id + '_' + from.id)) {
-        skipped++;
-        continue;
-      }
-
-      const product = productMap.get(selling_id.toLowerCase());
-      if (!product) {
+      // 同一个编号，只记录第一个留言者
+      if (matchedIds.has(selling_id)) {
         skipped++;
         continue;
       }
 
       try {
-        const price_raw = Number(product.price || 0);
-        const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
         await db.collection('triggered_comments').add({
           comment_id,
           post_id,
           user_id: from.id,
           user_name: from.name || '',
           selling_id,
-          product_name: product.product_name || '',
-          category: product.category || '',
-          price: price_raw,
-          price_fmt,
+          category: 'B',
+          product_name: '',
+          price: 0,
+          price_fmt: '',
           created_time,
           replied: false,
         });
 
-        recorded.add(selling_id + '_' + from.id);
+        matchedIds.add(selling_id);
         success++;
       } catch (err) {
         console.error('❌ 写入失败:', err);
