@@ -2,13 +2,9 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-const PAGE_ID = process.env.PAGE_ID;
-const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
-
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-
 const db = getFirestore();
 
 export default async function handler(req, res) {
@@ -16,72 +12,90 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
+  const { message, from_id, from_name, comment_id, post_id, created_time } = req.body || {};
+  if (!message || !from_id || !comment_id || !post_id) {
+    return res.status(400).json({ error: '缺少必要字段' });
+  }
+
   try {
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
-    if (!post_id) {
-      return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
+    // 若是新直播，删除旧订单
+    const lastProductSnapshot = await db.collection('live_products').where('post_id', '!=', post_id).limit(1).get();
+    if (!lastProductSnapshot.empty) {
+      const deleteLive = await db.collection('live_products').listDocuments();
+      const deleteOrders = await db.collection('orders').listDocuments();
+      await Promise.all([
+        ...deleteLive.map(doc => doc.delete()),
+        ...deleteOrders.map(doc => doc.delete())
+      ]);
     }
 
-    const allComments = [];
-    let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
-
-    while (nextPage) {
-      const res = await fetch(nextPage);
-      const data = await res.json();
-      allComments.push(...(data.data || []));
-      nextPage = data.paging?.next || null;
+    // 获取商品清单
+    const productsRef = db.collection('live_products');
+    const snapshot = await productsRef.where('post_id', '==', post_id).get();
+    if (snapshot.empty) {
+      return res.status(404).json({ error: '未找到商品数据' });
     }
 
-    let success = 0, skipped = 0, failed = 0;
-
-    for (const comment of allComments) {
-      const { message, from, id: comment_id, created_time } = comment;
-
-      if (from?.id === PAGE_ID) {
-        skipped++;
-        continue;
+    const productList = [];
+    snapshot.forEach(doc => {
+      const item = doc.data();
+      const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
+      if (id) {
+        productList.push({ ...item, id });
       }
-
-      const payload = {
-        message,
-        from_id: from?.id || '',
-        from_name: from?.name || '',
-        comment_id,
-        post_id,
-        created_time
-      };
-
-      try {
-        const saveRes = await fetch(`${req.headers.origin || 'https://your.vercel.app'}/api/saveVisitorOrder`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (saveRes.ok) {
-          const result = await saveRes.json().catch(() => ({})); // 防止 JSON 错误导致中断
-          if (result.success) success++;
-          else skipped++;
-        } else {
-          failed++;
-        }
-      } catch (err) {
-        failed++;
-      }
-    }
-
-    return res.status(200).json({
-      message: '识别完成',
-      post_id,
-      success,
-      skipped,
-      failed,
-      total: allComments.length
     });
+
+    const messageText = message.toLowerCase().replace(/\s+/g, '');
+    const matched = productList.find(p => messageText.includes(p.id));
+
+    if (!matched) {
+      return res.status(200).json({ success: false, reason: '留言中无商品编号' });
+    }
+
+    const ordersRef = db.collection('orders');
+
+    if (matched.category === 'B') {
+      // B 类商品只接受一个订单
+      const bQuery = await ordersRef
+        .where('selling_id', '==', matched.selling_id)
+        .limit(1)
+        .get();
+      if (!bQuery.empty) {
+        return res.status(200).json({ success: false, reason: 'B类商品已被抢先下单' });
+      }
+    }
+
+    if (matched.category === 'A') {
+      // A 类商品允许多个顾客下单（但同一顾客不能重复）
+      const aQuery = await ordersRef
+        .where('selling_id', '==', matched.selling_id)
+        .where('user_id', '==', from_id)
+        .limit(1)
+        .get();
+      if (!aQuery.empty) {
+        return res.status(200).json({ success: false, reason: '该顾客已下单此A类商品' });
+      }
+    }
+
+    const price_fmt = Number(matched.price || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 });
+
+    await ordersRef.add({
+      comment_id,
+      post_id,
+      user_id: from_id,
+      user_name: from_name || '',
+      selling_id: matched.selling_id,
+      product_name: matched.product_name || '',
+      category: matched.category || '',
+      price: matched.price || 0,
+      price_fmt,
+      created_time,
+      replied: false,
+    });
+
+    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error('[识别留言失败]', err);
-    return res.status(500).json({ error: '识别失败', detail: err.message });
+    console.error('识别订单失败:', err);
+    return res.status(500).json({ error: '识别订单失败', detail: err.message });
   }
 }
