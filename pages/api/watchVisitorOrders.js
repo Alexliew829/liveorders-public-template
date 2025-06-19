@@ -25,11 +25,11 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 删除旧订单（同一贴文）
+    // ✅ 删除旧订单
     const existingOrders = await db.collection('orders').where('post_id', '==', post_id).get();
-    const deletePromises = [];
-    existingOrders.forEach((doc) => deletePromises.push(doc.ref.delete()));
-    await Promise.all(deletePromises);
+    const batch = db.batch();
+    existingOrders.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
 
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
@@ -91,8 +91,6 @@ export default async function handler(req, res) {
             continue;
           }
         }
-
-        // A 类商品允许无限下单，无需限制
 
         const price_raw = Number(matched.price || matched.price_raw || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
