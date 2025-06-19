@@ -48,9 +48,14 @@ export default async function handler(req, res) {
     const matchedIds = new Set();
 
     for (const comment of allComments) {
-      const { message, from, id: comment_id, created_time } = comment;
+      const { message, from = {}, id: comment_id, created_time } = comment;
 
-      if (!message || !from || from.id === PAGE_ID) {
+      if (!message || !comment_id) {
+        skipped++;
+        continue;
+      }
+
+      if (from.id === PAGE_ID) {
         skipped++;
         continue;
       }
@@ -75,7 +80,7 @@ export default async function handler(req, res) {
         await db.collection('triggered_comments').add({
           comment_id,
           post_id,
-          user_id: from.id,
+          user_id: from.id || '',
           user_name: from.name || '',
           selling_id,
           category: 'B',
