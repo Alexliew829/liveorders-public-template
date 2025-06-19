@@ -1,27 +1,15 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { useEffect, useState } from 'react';
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+export default function DebugComments() {
+  const [comments, setComments] = useState([]);
 
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
+  useEffect(() => {
+    fetch('/api/getComments')
+      .then(res => res.json())
+      .then(setComments)
+      .catch(err => console.error('读取错误', err));
+  }, []);
 
-const db = getFirestore();
-
-export async function getServerSideProps() {
-  const snapshot = await db
-    .collection('triggered_comments')
-    .orderBy('created_at', 'desc')
-    .limit(20)
-    .get();
-
-  const comments = snapshot.docs.map(doc => doc.data());
-
-  return { props: { comments } };
-}
-
-export default function DebugComments({ comments }) {
   return (
     <div style={{ fontFamily: 'sans-serif', padding: 20 }}>
       <h1>🔥 Triggered Comments (最近 20 条)</h1>
