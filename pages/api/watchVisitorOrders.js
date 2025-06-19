@@ -25,6 +25,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
+    // 删除旧的 triggered_comments 数据
+    const oldOrdersSnapshot = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
+    const batch = db.batch();
+    oldOrdersSnapshot.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -52,12 +58,6 @@ export default async function handler(req, res) {
 
     const ordersRef = db.collection('triggered_comments');
 
-    // 删除旧订单记录（当前贴文）
-    const oldOrders = await ordersRef.where('post_id', '==', post_id).get();
-    const batch = db.batch();
-    oldOrders.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
@@ -67,7 +67,6 @@ export default async function handler(req, res) {
       }
 
       const messageText = message.toLowerCase().replace(/\s+/g, '');
-
       const matched = productList.find((p) => {
         const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
         return pattern.test(messageText);
@@ -82,17 +81,14 @@ export default async function handler(req, res) {
         const isB = matched.category?.toUpperCase() === 'B';
 
         if (isB) {
-          const bQuery = await ordersRef
-            .where('selling_id', '==', matched.selling_id)
-            .limit(1)
-            .get();
+          const bQuery = await ordersRef.where('selling_id', '==', matched.selling_id).limit(1).get();
           if (!bQuery.empty) {
             skipped++;
             continue;
           }
         }
 
-        const price_raw = Number(matched.price || matched.price || 0);
+        const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
         await ordersRef.add({
@@ -103,7 +99,7 @@ export default async function handler(req, res) {
           selling_id: matched.selling_id,
           product_name: matched.product_name || '',
           category: matched.category || '',
-          price: price,
+          price: price_raw,
           price_fmt,
           created_time,
           replied: false,
