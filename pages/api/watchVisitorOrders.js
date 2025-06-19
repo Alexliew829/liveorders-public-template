@@ -45,27 +45,47 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
-    const savedUserIds = new Set();
+    const matchedIds = new Set();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (!message || !from || from.id === PAGE_ID || savedUserIds.has(from.id)) {
+      if (!message || !from || from.id === PAGE_ID) {
+        skipped++;
+        continue;
+      }
+
+      const cleanMessage = message.toUpperCase().replace(/\s+/g, '');
+      const match = cleanMessage.match(/\bB(\d{1,3})\b/);
+
+      if (!match) {
+        skipped++;
+        continue;
+      }
+
+      const selling_id = `B${match[1].padStart(3, '0')}`;
+
+      if (matchedIds.has(selling_id)) {
         skipped++;
         continue;
       }
 
       try {
-        await db.collection('triggered_comments').doc(comment_id).set({
+        await db.collection('triggered_comments').doc(selling_id).set({
           comment_id,
           post_id,
-          user_id: from.id,
+          user_id: from.id || '',
           user_name: from.name || '',
-          message,
+          selling_id,
+          category: 'B',
+          product_name: '',
+          price: 0,
+          price_fmt: '',
           created_time,
           replied: false,
         });
-        savedUserIds.add(from.id);
+
+        matchedIds.add(selling_id);
         success++;
       } catch (err) {
         console.error('❌ 写入失败:', err);
