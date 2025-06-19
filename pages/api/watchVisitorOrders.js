@@ -35,6 +35,12 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
+    // 删除旧留言记录
+    const oldComments = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
+    const batch = db.batch();
+    oldComments.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+
     let success = 0,
       skipped = 0,
       failed = 0;
@@ -49,11 +55,6 @@ export default async function handler(req, res) {
         productList.push({ ...item, id });
       }
     });
-
-    // 删除旧留言
-    const triggeredRef = db.collection('triggered_comments');
-    const old = await triggeredRef.where('post_id', '==', post_id).get();
-    for (const doc of old.docs) await doc.ref.delete();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
@@ -79,7 +80,8 @@ export default async function handler(req, res) {
         const isB = matched.category?.toUpperCase() === 'B';
 
         if (isB) {
-          const bQuery = await triggeredRef
+          const bQuery = await db
+            .collection('triggered_comments')
             .where('selling_id', '==', matched.selling_id)
             .limit(1)
             .get();
@@ -92,7 +94,7 @@ export default async function handler(req, res) {
         const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-        await triggeredRef.doc(comment_id).set({
+        await db.collection('triggered_comments').add({
           comment_id,
           post_id,
           user_id: from.id,
@@ -108,7 +110,7 @@ export default async function handler(req, res) {
 
         success++;
       } catch (err) {
-        console.error('写入失败', err);
+        console.error('❌ 写入失败:', err);
         failed++;
       }
     }
