@@ -40,9 +40,9 @@ export default async function handler(req, res) {
       failed = 0;
 
     const productsRef = db.collection('live_products');
-    const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
+    const snapshot = await productsRef.where('post_id', '==', post_id).get();
     const productList = [];
-    productSnapshot.forEach((doc) => {
+    snapshot.forEach((doc) => {
       const item = doc.data();
       const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
       if (id) {
@@ -51,19 +51,15 @@ export default async function handler(req, res) {
     });
 
     const ordersRef = db.collection('triggered_comments');
-    const debugRef = db.collection('debug_comments');
 
-    // 先清空旧留言记录
-    const oldComments = await ordersRef.where('post_id', '==', post_id).get();
-    for (const doc of oldComments.docs) {
-      await doc.ref.delete();
-    }
+    // 删除旧订单
+    const oldOrders = await ordersRef.where('post_id', '==', post_id).get();
+    const batch = db.batch();
+    oldOrders.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
-
-      // log 调试每条留言
-      await debugRef.add({ comment_id, message, from, created_time, post_id });
 
       if (!message || !from || from.id === PAGE_ID) {
         skipped++;
@@ -71,6 +67,7 @@ export default async function handler(req, res) {
       }
 
       const messageText = message.toLowerCase().replace(/\s+/g, '');
+
       const matched = productList.find((p) => {
         const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
         return pattern.test(messageText);
@@ -83,13 +80,12 @@ export default async function handler(req, res) {
 
       try {
         const isB = matched.category?.toUpperCase() === 'B';
-
         if (isB) {
-          const bQuery = await ordersRef
+          const exists = await ordersRef
             .where('selling_id', '==', matched.selling_id)
             .limit(1)
             .get();
-          if (!bQuery.empty) {
+          if (!exists.empty) {
             skipped++;
             continue;
           }
