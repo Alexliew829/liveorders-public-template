@@ -128,9 +128,12 @@
     }
 
     async function watchVisitorOrders() {
+      if (!latestPostId) await getLatestPostId();
+      if (!latestPostId) return;
       try {
-        const res = await fetch('api/watchVisitorOrders', { method: 'POST' });
+        const res = await fetch(`api/watchVisitorOrders?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
+        console.log('识别结果', data);  // 可移除
         alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
       } catch (err) {
         alert('识别下单失败：' + err.message);
