@@ -25,12 +25,16 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 删除旧的 triggered_comments 数据
-    const oldOrdersSnapshot = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
+    // 删除旧的 triggered_comments
+    const oldOrders = await db
+      .collection('triggered_comments')
+      .where('post_id', '==', post_id)
+      .get();
     const batch = db.batch();
-    oldOrdersSnapshot.forEach((doc) => batch.delete(doc.ref));
+    oldOrders.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
 
+    // 读取所有留言
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -45,6 +49,7 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
+    // 抓取商品列表
     const productsRef = db.collection('live_products');
     const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
     const productList = [];
@@ -81,7 +86,10 @@ export default async function handler(req, res) {
         const isB = matched.category?.toUpperCase() === 'B';
 
         if (isB) {
-          const bQuery = await ordersRef.where('selling_id', '==', matched.selling_id).limit(1).get();
+          const bQuery = await ordersRef
+            .where('selling_id', '==', matched.selling_id)
+            .limit(1)
+            .get();
           if (!bQuery.empty) {
             skipped++;
             continue;
@@ -107,6 +115,7 @@ export default async function handler(req, res) {
 
         success++;
       } catch (err) {
+        console.error('写入失败:', err);
         failed++;
       }
     }
