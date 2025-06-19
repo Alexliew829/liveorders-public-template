@@ -11,8 +11,8 @@ export default function TestPage() {
       })
     });
 
-    const data = await res.json();
-    alert(JSON.stringify(data, null, 2));
+    const result = await res.json();
+    alert(JSON.stringify(result, null, 2));
   };
 
   return (
@@ -20,10 +20,12 @@ export default function TestPage() {
       <h2>🧪 Testing.js 写入 Firebase</h2>
       <button
         onClick={handleTest}
-        style={{ padding: '10px 20px', fontSize: 16, cursor: 'pointer' }}
-      >
-        👉 点我测试写入 triggered_comments
-      </button>
-    </div>
-  );
-}
+        style={{
+          padding: '10px 20px',
+          fontSize: 18,
+          cursor: 'pointer',
+          backgroundColor: '#0070f3',
+          color: 'white',
+          border: 'none',
+          borderRadius: 8
+        }
