@@ -18,7 +18,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取所有商品
+    // 若是新直播，删除旧订单
+    const lastProductSnapshot = await db.collection('live_products').where('post_id', '!=', post_id).limit(1).get();
+    if (!lastProductSnapshot.empty) {
+      const deleteLive = await db.collection('live_products').listDocuments();
+      const deleteOrders = await db.collection('orders').listDocuments();
+      await Promise.all([
+        ...deleteLive.map(doc => doc.delete()),
+        ...deleteOrders.map(doc => doc.delete())
+      ]);
+    }
+
+    // 获取商品清单
     const productsRef = db.collection('live_products');
     const snapshot = await productsRef.where('post_id', '==', post_id).get();
     if (snapshot.empty) {
@@ -43,8 +54,8 @@ export default async function handler(req, res) {
 
     const ordersRef = db.collection('orders');
 
-    if (matched.selling_id.toUpperCase().startsWith('B')) {
-      // B 类：限制一人下单（仅允许第一位）
+    if (matched.category === 'B') {
+      // B 类商品只接受一个订单
       const bQuery = await ordersRef
         .where('selling_id', '==', matched.selling_id)
         .limit(1)
@@ -54,7 +65,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // A 类无需限制重复下单，允许多个顾客（或同一顾客）重复留言
+    if (matched.category === 'A') {
+      // A 类商品允许多个顾客下单（但同一顾客不能重复）
+      const aQuery = await ordersRef
+        .where('selling_id', '==', matched.selling_id)
+        .where('user_id', '==', from_id)
+        .limit(1)
+        .get();
+      if (!aQuery.empty) {
+        return res.status(200).json({ success: false, reason: '该顾客已下单此A类商品' });
+      }
+    }
 
     const price_fmt = Number(matched.price || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
@@ -65,6 +86,7 @@ export default async function handler(req, res) {
       user_name: from_name || '',
       selling_id: matched.selling_id,
       product_name: matched.product_name || '',
+      category: matched.category || '',
       price: matched.price || 0,
       price_fmt,
       created_time,
@@ -73,7 +95,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true });
   } catch (err) {
-    console.error('写入订单失败:', err);
-    return res.status(500).json({ error: '写入订单失败', detail: err.message });
+    console.error('识别订单失败:', err);
+    return res.status(500).json({ error: '识别订单失败', detail: err.message });
   }
 }
