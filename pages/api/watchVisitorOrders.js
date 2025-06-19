@@ -15,7 +15,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
     const postRes = await fetch(
       `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${process.env.FB_ACCESS_TOKEN}&limit=1`
     );
@@ -27,14 +26,13 @@ export default async function handler(req, res) {
     }
 
     // 删除旧订单资料
-    const prevOrdersSnap = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
-    const batch = db.batch();
-    prevOrdersSnap.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
+    const oldOrders = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
+    const deletePromises = oldOrders.docs.map(doc => doc.ref.delete());
+    await Promise.all(deletePromises);
 
-    // 获取所有留言
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
+
     while (nextPage) {
       const res = await fetch(nextPage);
       const data = await res.json();
@@ -42,32 +40,37 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
+    let success = 0,
+      skipped = 0,
+      failed = 0;
+
     const productsRef = db.collection('live_products');
     const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
     const productList = [];
     productSnapshot.forEach((doc) => {
       const item = doc.data();
-      const id = item.selling_id?.toLowerCase().replace(/\s+/g, '').replace(/^0+/, '');
+      const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
       if (id) {
         productList.push({ ...item, id });
       }
     });
 
-    let success = 0,
-      skipped = 0,
-      failed = 0;
-
-    const existingB = new Set();
+    const recordedB = new Set();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
+
       if (!message || !from || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
 
-      const messageText = message.toLowerCase().replace(/\s+/g, '').replace(/^0+/, '');
-      const matched = productList.find((p) => messageText.includes(p.id));
+      const messageText = message.toLowerCase().replace(/\s+/g, '');
+      const matched = productList.find((p) => {
+        const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
+        return pattern.test(messageText);
+      });
+
       if (!matched) {
         skipped++;
         continue;
@@ -75,15 +78,10 @@ export default async function handler(req, res) {
 
       try {
         const isB = matched.category?.toUpperCase() === 'B';
-        const isA = matched.category?.toUpperCase() === 'A';
 
-        if (isB) {
-          if (existingB.has(matched.selling_id)) {
-            skipped++;
-            continue;
-          } else {
-            existingB.add(matched.selling_id);
-          }
+        if (isB && recordedB.has(matched.selling_id)) {
+          skipped++;
+          continue;
         }
 
         const price_raw = Number(matched.price || 0);
@@ -103,15 +101,15 @@ export default async function handler(req, res) {
           replied: false,
         });
 
+        if (isB) recordedB.add(matched.selling_id);
         success++;
       } catch (err) {
-        console.error('写入失败:', err);
         failed++;
       }
     }
 
     return res.status(200).json({
-      message: '识别完成 ✅',
+      message: '识别完成',
       post_id,
       success,
       skipped,
@@ -119,7 +117,7 @@ export default async function handler(req, res) {
       total: allComments.length,
     });
   } catch (err) {
-    console.error('系统异常:', err);
-    return res.status(500).json({ error: '系统异常', detail: err.message });
+    console.error('识别留言失败:', err);
+    return res.status(500).json({ error: '识别失败', detail: err.message });
   }
 }
