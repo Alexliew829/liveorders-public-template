@@ -45,6 +45,8 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
+    const matchedIds = new Set();
+
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
@@ -61,13 +63,19 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const selling_id = `B${match[1].padStart(3, '0')}`; // 标准格式为 B+三位数字
+      const number = match[1].padStart(3, '0');
+      const selling_id = `B${number}`;
+
+      if (matchedIds.has(selling_id)) {
+        skipped++;
+        continue;
+      }
 
       try {
         await db.collection('triggered_comments').doc(selling_id).set({
           comment_id,
           post_id,
-          user_id: from.id || '',
+          user_id: from.id,
           user_name: from.name || '',
           selling_id,
           category: 'B',
@@ -78,6 +86,7 @@ export default async function handler(req, res) {
           replied: false,
         });
 
+        matchedIds.add(selling_id);
         success++;
       } catch (err) {
         console.error('❌ 写入失败:', err);
@@ -86,7 +95,7 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      message: '识别完成',
+      message: '识别完成 ✅',
       post_id,
       success,
       skipped,
