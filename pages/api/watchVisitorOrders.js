@@ -40,9 +40,9 @@ export default async function handler(req, res) {
       failed = 0;
 
     const productsRef = db.collection('live_products');
-    const snapshot = await productsRef.where('post_id', '==', post_id).get();
+    const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
     const productList = [];
-    snapshot.forEach((doc) => {
+    productSnapshot.forEach((doc) => {
       const item = doc.data();
       const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
       if (id) {
@@ -50,13 +50,10 @@ export default async function handler(req, res) {
       }
     });
 
-    const ordersRef = db.collection('triggered_comments');
-
-    // 删除旧订单
-    const oldOrders = await ordersRef.where('post_id', '==', post_id).get();
-    const batch = db.batch();
-    oldOrders.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
+    // 删除旧留言
+    const triggeredRef = db.collection('triggered_comments');
+    const old = await triggeredRef.where('post_id', '==', post_id).get();
+    for (const doc of old.docs) await doc.ref.delete();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
@@ -80,12 +77,13 @@ export default async function handler(req, res) {
 
       try {
         const isB = matched.category?.toUpperCase() === 'B';
+
         if (isB) {
-          const exists = await ordersRef
+          const bQuery = await triggeredRef
             .where('selling_id', '==', matched.selling_id)
             .limit(1)
             .get();
-          if (!exists.empty) {
+          if (!bQuery.empty) {
             skipped++;
             continue;
           }
@@ -94,7 +92,7 @@ export default async function handler(req, res) {
         const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-        await ordersRef.add({
+        await triggeredRef.doc(comment_id).set({
           comment_id,
           post_id,
           user_id: from.id,
@@ -110,6 +108,7 @@ export default async function handler(req, res) {
 
         success++;
       } catch (err) {
+        console.error('写入失败', err);
         failed++;
       }
     }
