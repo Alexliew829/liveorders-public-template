@@ -2,26 +2,42 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-const db = getFirestore();
 
+const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
+const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN;
 
 export default async function handler(req, res) {
+  // Facebook Webhook 验证（GET）
+  if (req.method === 'GET') {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      return res.status(200).send(challenge);
+    } else {
+      return res.status(403).send('验证失败');
+    }
+  }
+
+  // 留言处理（POST）
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: '只允许 POST 请求' });
+    return res.status(405).json({ error: '只允许 GET 或 POST 请求' });
   }
 
   try {
     const body = req.body;
     const entries = body.entry || [];
-
     let success = 0, skipped = 0;
 
     for (const entry of entries) {
       const changes = entry.changes || [];
+
       for (const change of changes) {
         const value = change.value;
         const comment = value.comment;
@@ -38,7 +54,7 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // 写入 debug_comments（调试用）
+        // 写入 debug_comments
         await db.collection('debug_comments').add({
           comment_id,
           message,
@@ -47,14 +63,16 @@ export default async function handler(req, res) {
           post_id
         });
 
-        // 写入 triggered_comments
-        const selling_idMatch = message?.toUpperCase().match(/B\s*\d{1,3}/);
-        if (!selling_idMatch) {
+        // 识别 A 或 B 类编号（如 A1、B01、a 88）
+        const matched = message?.toUpperCase().match(/([AB])\s*\d{1,3}/);
+        if (!matched) {
           skipped++;
           continue;
         }
 
-        const selling_id = 'B' + selling_idMatch[0].replace(/\D/g, '').padStart(3, '0');
+        const rawType = matched[1]; // "A" 或 "B"
+        const selling_id = rawType + matched[0].replace(/\D/g, '').padStart(3, '0');
+        const category = rawType;
 
         await db.collection('triggered_comments').add({
           comment_id,
@@ -70,7 +88,7 @@ export default async function handler(req, res) {
           price_fmt: '',
           user_id: from.id || '',
           user_name: from.name || '',
-          category: 'B'
+          category
         });
 
         success++;
