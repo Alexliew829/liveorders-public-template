@@ -63,32 +63,28 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const selling_id = `B${match[1].padStart(3, '0')}`;
+      const selling_id = `B${match[1].padStart(3, '0')}`; // 标准格式为 B+三位数字
 
+      // 同一个编号，只记录第一个留言者
       if (matchedIds.has(selling_id)) {
         skipped++;
         continue;
       }
 
       try {
-        const user_id = from.id || '';
-        const user_name = from.name || '匿名';
-
-        await db.collection('triggered_comments')
-          .doc(`${selling_id}_${comment_id}`)
-          .set({
-            comment_id,
-            post_id,
-            user_id,
-            user_name,
-            selling_id,
-            category: 'B',
-            product_name: '',
-            price: 0,
-            price_fmt: '',
-            created_time,
-            replied: false,
-          });
+        await db.collection('triggered_comments').doc(`${selling_id}_${comment_id}`).set({
+          comment_id,
+          post_id,
+          user_id: from.id,
+          user_name: from.name || '',
+          selling_id,
+          category: 'B',
+          product_name: '',
+          price: 0,
+          price_fmt: '',
+          created_time,
+          replied: false,
+        });
 
         matchedIds.add(selling_id);
         success++;
