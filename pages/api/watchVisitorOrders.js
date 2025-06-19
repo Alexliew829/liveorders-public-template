@@ -45,71 +45,67 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
-    const productsRef = db.collection('live_products');
-    const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
-    const productList = [];
+    const productSnapshot = await db.collection('live_products').where('post_id', '==', post_id).get();
+    const productMap = new Map();
+
     productSnapshot.forEach((doc) => {
       const item = doc.data();
       const id = item.selling_id?.toLowerCase().replace(/\s+/g, '');
-      if (id) {
-        productList.push({ ...item, id });
+      if (id && !productMap.has(id)) {
+        productMap.set(id, item);
       }
     });
+
+    const recorded = new Set();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (!message || !from?.id || !from?.name || from.id === PAGE_ID) {
+      if (!message || !from?.id || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
 
       const messageText = message.toLowerCase().replace(/\s+/g, '');
-      const matched = productList.find((p) => {
-        const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
-        return pattern.test(messageText);
-      });
+      const match = messageText.match(/\b([ab])0{0,2}(\d{1,3})\b/i);
 
-      if (!matched) {
+      if (!match) {
+        skipped++;
+        continue;
+      }
+
+      const selling_id = `${match[1].toUpperCase()}${match[2]}`;
+
+      if (recorded.has(selling_id + '_' + from.id)) {
+        skipped++;
+        continue;
+      }
+
+      const product = productMap.get(selling_id.toLowerCase());
+      if (!product) {
         skipped++;
         continue;
       }
 
       try {
-        const isB = matched.category?.toUpperCase() === 'B';
-
-        if (isB) {
-          const bQuery = await db
-            .collection('triggered_comments')
-            .where('selling_id', '==', matched.selling_id)
-            .limit(1)
-            .get();
-          if (!bQuery.empty) {
-            skipped++;
-            continue;
-          }
-        }
-
-        const price_raw = Number(matched.price || 0);
+        const price_raw = Number(product.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
-        const user_id = from.id || '';
-        const user_name = from.name || '';
 
         await db.collection('triggered_comments').add({
           comment_id,
           post_id,
-          user_id,
-          user_name,
-          selling_id: matched.selling_id,
-          product_name: matched.product_name || '',
-          category: matched.category || '',
+          user_id: from.id,
+          user_name: from.name || '',
+          selling_id,
+          product_name: product.product_name || '',
+          category: product.category || '',
           price: price_raw,
           price_fmt,
           created_time,
           replied: false,
         });
 
+        recorded.add(selling_id + '_' + from.id);
         success++;
       } catch (err) {
         console.error('❌ 写入失败:', err);
