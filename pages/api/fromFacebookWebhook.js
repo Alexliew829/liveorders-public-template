@@ -1,5 +1,3 @@
-// pages/api/fromFacebookWebhook.js
-
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -8,64 +6,74 @@ if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
 const db = getFirestore();
+
 const PAGE_ID = process.env.PAGE_ID;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Only POST requests allowed' });
+    return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
   try {
     const body = req.body;
+    const entry = body.entry?.[0];
+    const change = entry?.changes?.[0];
+    const comment = change?.value;
 
-    if (!body || !body.entry) {
-      return res.status(400).json({ error: 'Invalid webhook payload' });
+    if (!comment || comment.verb !== 'add' || !comment.message) {
+      return res.status(200).json({ message: '无效留言，忽略' });
     }
 
-    let writeCount = 0;
+    const { post_id, comment_id, created_time, from, message } = comment;
+    if (!from || from.id === PAGE_ID) {
+      return res.status(200).json({ message: '跳过主页留言' });
+    }
 
-    for (const entry of body.entry) {
-      const changes = entry.changes || [];
+    const cleanMessage = message.toUpperCase().replace(/\s+/g, '');
+    const match = cleanMessage.match(/\b([AB])(\d{1,4})\b/);
+    if (!match) {
+      return res.status(200).json({ message: '无有效编号，跳过' });
+    }
 
-      for (const change of changes) {
-        const value = change.value;
-        const comment_id = value.comment_id;
-        const message = value.message;
-        const from = value.from;
-        const post_id = value.post_id;
-        const created_time = value.created_time;
+    const prefix = match[1];
+    const number = match[2].padStart(3, '0');
+    const selling_id = `${prefix}${number}`;
 
-        // 跳过主页自己的留言
-        if (!from || from.id === PAGE_ID) continue;
+    const productSnap = await db.collection('live_products').doc(selling_id).get();
+    if (!productSnap.exists) {
+      return res.status(200).json({ message: `编号 ${selling_id} 不存在于产品表` });
+    }
 
-        // 检查留言是否包含 B 编号
-        const cleaned = message.toUpperCase().replace(/\s+/g, '');
-        const match = cleaned.match(/\bB(\d{1,3})\b/);
-        if (!match) continue;
+    const product = productSnap.data();
+    const isB = product.category === 'B';
 
-        const selling_id = `B${match[1].padStart(3, '0')}`;
-
-        await db.collection('triggered_comments').doc(selling_id).set({
-          comment_id,
-          post_id,
-          user_id: from.id,
-          user_name: from.name || '',
-          selling_id,
-          category: 'B',
-          product_name: '',
-          price: 0,
-          price_fmt: '',
-          created_time,
-          replied: false,
-        });
-
-        writeCount++;
+    if (isB) {
+      const existing = await db
+        .collection('triggered_comments')
+        .where('selling_id', '==', selling_id)
+        .get();
+      if (!existing.empty) {
+        return res.status(200).json({ message: `B 类商品 ${selling_id} 已有留言者，跳过` });
       }
     }
 
-    return res.status(200).json({ message: '写入完成', success: writeCount });
+    await db.collection('triggered_comments').add({
+      comment_id,
+      post_id,
+      created_at: new Date().toISOString(),
+      selling_id,
+      category: product.category,
+      product_name: product.product_name || '',
+      price: product.price || 0,
+      price_fmt: product.price_fmt || '',
+      replied: false,
+      user_id: from.id,
+      user_name: from.name || '',
+    });
+
+    return res.status(200).json({ message: `✅ 已记录访客留言 ${selling_id}` });
   } catch (err) {
-    console.error('Webhook 处理失败:', err);
-    return res.status(500).json({ error: '服务器错误', detail: err.message });
+    console.error('❌ Webhook 错误:', err);
+    return res.status(500).json({ error: 'Webhook 处理失败', detail: err.message });
   }
 }
