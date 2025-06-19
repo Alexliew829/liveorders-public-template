@@ -12,67 +12,64 @@ if (!getApps().length) {
 const db = getFirestore();
 
 export default async function handler(req, res) {
-  const isDebug = req.query.debug !== undefined;
-
-  if (req.method !== 'POST' && !isDebug) {
+  if (req.method !== 'POST') {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
   try {
+    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
-
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+      return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    const commentsRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message&limit=100`);
-    const commentsData = await commentsRes.json();
-    const allComments = commentsData?.data || [];
+    // 删除旧的商品资料
+    const oldDocs = await db.collection('live_products').get();
+    const deletePromises = oldDocs.docs.map(doc => doc.ref.delete());
+    await Promise.all(deletePromises);
 
-    // 删除旧商品与旧订单
-    const batch = db.batch();
+    // 获取该贴文所有留言
+    const allComments = [];
+    let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
-    const liveProducts = await db.collection('live_products').get();
-    liveProducts.forEach(doc => batch.delete(doc.ref));
+    while (nextPage) {
+      const res = await fetch(nextPage);
+      const data = await res.json();
+      allComments.push(...(data.data || []));
+      nextPage = data.paging?.next || null;
+    }
 
-    const orders = await db.collection('orders').get();
-    orders.forEach(doc => batch.delete(doc.ref));
-
-    await batch.commit();
-
+    const regex = /(A|B)\s*0*(\d{1,3})[\s\-～_]*([^RrMm\n]+)[^\d]*RM\s*([\d,.]+)/i;
     let count = 0;
-    const added = [];
 
-    for (const c of allComments) {
-      const message = c.message || '';
-      const match = message.match(/([AB]\s*\d{1,3})\s+(.+)\s+RM\s*(\d+[,.]?\d*)/i);
-
+    for (const comment of allComments) {
+      const { message = '', id: comment_id, created_time } = comment;
+      const match = message.match(regex);
       if (!match) continue;
 
-      const [, rawId, product_name, priceRaw] = match;
-      const selling_id = rawId.toUpperCase().replace(/\s+/g, '');
-      const category = selling_id.startsWith('A') ? 'A' : 'B';
-      const price = parseFloat(priceRaw.toString().replace(/,/g, ''));
-      const price_fmt = price.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+      const category = match[1].toUpperCase();
+      const number = match[2].padStart(3, '0');
+      const selling_id = category + number;
+      const product_name = match[3].trim();
+      const price_raw = parseFloat(match[4].replace(/,/g, ''));
+      const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      await db.collection('live_products').add({
+      await db.collection('live_products').doc(selling_id).set({
         selling_id,
         category,
         product_name,
-        price,
+        price: price_raw,
         price_fmt,
-        comment_id: c.id,
+        comment_id,
         post_id,
-        created_at: new Date().toISOString(),
+        created_at: created_time
       });
-
-      added.push(selling_id);
       count++;
     }
 
-    return res.status(200).json({ success: true, count, added });
+    return res.status(200).json({ message: '记录商品完成', post_id, total: count });
   } catch (err) {
     console.error('[记录商品失败]', err);
     return res.status(500).json({ error: '记录商品失败', detail: err.message });
