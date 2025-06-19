@@ -61,10 +61,10 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const selling_id = `B${match[1].padStart(3, '0')}`;
+      const selling_id = `B${match[1].padStart(3, '0')}`; // 标准格式为 B+三位数字
 
       try {
-        await db.collection('triggered_comments').add({
+        await db.collection('triggered_comments').doc(selling_id).set({
           comment_id,
           post_id,
           user_id: from.id || '',
@@ -77,6 +77,7 @@ export default async function handler(req, res) {
           created_time,
           replied: false,
         });
+
         success++;
       } catch (err) {
         console.error('❌ 写入失败:', err);
