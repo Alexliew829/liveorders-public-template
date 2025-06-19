@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (from?.id === PAGE_ID) {
+      if (!from?.id || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
@@ -80,26 +80,14 @@ export default async function handler(req, res) {
           }
         }
 
-        if (matched.category === 'A') {
-          const aQuery = await ordersRef
-            .where('selling_id', '==', matched.selling_id)
-            .where('user_id', '==', from?.id || '')
-            .limit(1)
-            .get();
-          if (!aQuery.empty) {
-            skipped++;
-            continue;
-          }
-        }
-
         const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
         await ordersRef.add({
           comment_id,
           post_id,
-          user_id: from?.id || '',
-          user_name: from?.name || '',
+          user_id: from.id,
+          user_name: from.name || '',
           selling_id: matched.selling_id,
           product_name: matched.product_name || '',
           category: matched.category || '',
