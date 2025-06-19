@@ -25,16 +25,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 删除旧的 triggered_comments
-    const oldOrders = await db
-      .collection('triggered_comments')
-      .where('post_id', '==', post_id)
-      .get();
+    const triggeredRef = db.collection('triggered_comments');
+    const oldSnapshot = await triggeredRef.where('post_id', '==', post_id).get();
     const batch = db.batch();
-    oldOrders.forEach((doc) => batch.delete(doc.ref));
+    oldSnapshot.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
 
-    // 读取所有留言
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -49,7 +45,6 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
-    // 抓取商品列表
     const productsRef = db.collection('live_products');
     const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
     const productList = [];
@@ -61,45 +56,41 @@ export default async function handler(req, res) {
       }
     });
 
-    const ordersRef = db.collection('triggered_comments');
+    const writtenKeys = new Set();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
-
       if (!message || !from || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
 
       const messageText = message.toLowerCase().replace(/\s+/g, '');
-      const matched = productList.find((p) => {
-        const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
-        return pattern.test(messageText);
-      });
+      const matched = productList.find((p) => messageText.includes(p.id));
 
       if (!matched) {
         skipped++;
         continue;
       }
 
-      try {
-        const isB = matched.category?.toUpperCase() === 'B';
+      const isB = matched.category?.toUpperCase() === 'B';
 
-        if (isB) {
-          const bQuery = await ordersRef
-            .where('selling_id', '==', matched.selling_id)
-            .limit(1)
-            .get();
-          if (!bQuery.empty) {
-            skipped++;
-            continue;
-          }
+      if (isB) {
+        const exists = [...writtenKeys].some(k => k.startsWith(`B|${matched.selling_id}|`));
+        if (exists) {
+          skipped++;
+          continue;
         }
+        writtenKeys.add(`B|${matched.selling_id}|${from.id}`);
+      } else {
+        writtenKeys.add(`A|${matched.selling_id}|${from.id}|${comment_id}`);
+      }
 
+      try {
         const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-        await ordersRef.add({
+        await triggeredRef.add({
           comment_id,
           post_id,
           user_id: from.id,
