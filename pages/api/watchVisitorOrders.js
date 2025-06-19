@@ -35,9 +35,7 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
-    let success = 0,
-      skipped = 0,
-      failed = 0;
+    let success = 0, skipped = 0, failed = 0;
 
     const productsRef = db.collection('live_products');
     const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
@@ -80,9 +78,9 @@ export default async function handler(req, res) {
           }
         }
 
-        // A 类商品允许重复，无需跳过
+        // A 类不限制重复留言
 
-        const price_raw = Number(matched.price || 0);
+        const price_raw = Number(matched.price || matched.price_raw || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
         await ordersRef.add({
