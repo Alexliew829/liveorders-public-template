@@ -25,11 +25,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 删除旧订单资料
-    const oldOrders = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
-    const deletePromises = oldOrders.docs.map(doc => doc.ref.delete());
-    await Promise.all(deletePromises);
-
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -55,10 +50,20 @@ export default async function handler(req, res) {
       }
     });
 
-    const recordedB = new Set();
+    const ordersRef = db.collection('triggered_comments');
+    const debugRef = db.collection('debug_comments');
+
+    // 先清空旧留言记录
+    const oldComments = await ordersRef.where('post_id', '==', post_id).get();
+    for (const doc of oldComments.docs) {
+      await doc.ref.delete();
+    }
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
+
+      // log 调试每条留言
+      await debugRef.add({ comment_id, message, from, created_time, post_id });
 
       if (!message || !from || from.id === PAGE_ID) {
         skipped++;
@@ -79,15 +84,21 @@ export default async function handler(req, res) {
       try {
         const isB = matched.category?.toUpperCase() === 'B';
 
-        if (isB && recordedB.has(matched.selling_id)) {
-          skipped++;
-          continue;
+        if (isB) {
+          const bQuery = await ordersRef
+            .where('selling_id', '==', matched.selling_id)
+            .limit(1)
+            .get();
+          if (!bQuery.empty) {
+            skipped++;
+            continue;
+          }
         }
 
         const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-        await db.collection('triggered_comments').add({
+        await ordersRef.add({
           comment_id,
           post_id,
           user_id: from.id,
@@ -101,7 +112,6 @@ export default async function handler(req, res) {
           replied: false,
         });
 
-        if (isB) recordedB.add(matched.selling_id);
         success++;
       } catch (err) {
         failed++;
