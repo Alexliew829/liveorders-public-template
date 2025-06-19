@@ -75,9 +75,15 @@
 <body>
   <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
+  <!-- ✅ Webhook 启动提示 -->
+  <div id="webhookStatus" style="margin-bottom: 20px; font-weight: bold; color: green;">
+    ✅ 系统已启动：访客留言后将自动识别，无需点击 👀 按钮
+  </div>
+
   <div class="button-container">
     <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
-    <button class="action-button" onclick="watchVisitorOrders()">👀 识别顾客下单留言</button>
+    <!-- 👀 Webhook 启动后不再需要 -->
+    <!-- <button class="action-button" onclick="watchVisitorOrders()">👀 识别顾客下单留言</button> -->
     <button class="action-button" onclick="autoSendPaymentLinks()">📬 自动发送付款连接</button>
     <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
     <button class="action-button" onclick="exportOrders()">📤 导出订单 Excel</button>
@@ -133,7 +139,7 @@
       try {
         const res = await fetch(`api/watchVisitorOrders?post_id=${latestPostId}`, { method: 'POST' });
         const data = await res.json();
-        console.log('识别结果', data);  // 可移除
+        console.log('识别结果', data);
         alert(`识别下单完成 ✅\n成功: ${data.success}\n跳过: ${data.skipped}\n失败: ${data.failed}`);
       } catch (err) {
         alert('识别下单失败：' + err.message);
