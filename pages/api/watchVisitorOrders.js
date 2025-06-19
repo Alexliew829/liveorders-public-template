@@ -25,12 +25,11 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 删除旧订单
-    const ordersRef = db.collection('orders');
-    const oldOrders = await ordersRef.where('post_id', '==', post_id).get();
-    const batch = db.batch();
-    oldOrders.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
+    // 删除旧订单（同一贴文）
+    const existingOrders = await db.collection('orders').where('post_id', '==', post_id).get();
+    const deletePromises = [];
+    existingOrders.forEach((doc) => deletePromises.push(doc.ref.delete()));
+    await Promise.all(deletePromises);
 
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${process.env.FB_ACCESS_TOKEN}&fields=id,message,from,created_time&limit=100`;
@@ -57,6 +56,8 @@ export default async function handler(req, res) {
       }
     });
 
+    const ordersRef = db.collection('orders');
+
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
@@ -79,7 +80,6 @@ export default async function handler(req, res) {
 
       try {
         const isB = matched.category?.toUpperCase() === 'B';
-        const isA = matched.category?.toUpperCase() === 'A';
 
         if (isB) {
           const bQuery = await ordersRef
@@ -92,17 +92,7 @@ export default async function handler(req, res) {
           }
         }
 
-        if (isA) {
-          const aQuery = await ordersRef
-            .where('selling_id', '==', matched.selling_id)
-            .where('user_id', '==', from.id)
-            .limit(1)
-            .get();
-          if (!aQuery.empty) {
-            skipped++;
-            continue;
-          }
-        }
+        // A 类商品允许无限下单，无需限制
 
         const price_raw = Number(matched.price || matched.price_raw || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
