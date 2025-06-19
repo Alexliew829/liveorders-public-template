@@ -59,13 +59,12 @@ export default async function handler(req, res) {
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (!message || !from || from.id === PAGE_ID) {
+      if (!message || !from?.id || !from?.name || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
 
       const messageText = message.toLowerCase().replace(/\s+/g, '');
-
       const matched = productList.find((p) => {
         const pattern = new RegExp(`\\b${p.id}\\b`, 'i');
         return pattern.test(messageText);
@@ -94,11 +93,14 @@ export default async function handler(req, res) {
         const price_raw = Number(matched.price || 0);
         const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
+        const user_id = from.id || '';
+        const user_name = from.name || '';
+
         await db.collection('triggered_comments').add({
           comment_id,
           post_id,
-          user_id: from.id,
-          user_name: from.name || '',
+          user_id,
+          user_name,
           selling_id: matched.selling_id,
           product_name: matched.product_name || '',
           category: matched.category || '',
