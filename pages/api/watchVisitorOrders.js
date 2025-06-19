@@ -48,14 +48,9 @@ export default async function handler(req, res) {
     const matchedIds = new Set();
 
     for (const comment of allComments) {
-      const { message, from = {}, id: comment_id, created_time } = comment;
+      const { message, from, id: comment_id, created_time } = comment;
 
-      if (!message || !comment_id) {
-        skipped++;
-        continue;
-      }
-
-      if (from.id === PAGE_ID) {
+      if (!message || !from || from.id === PAGE_ID) {
         skipped++;
         continue;
       }
@@ -68,28 +63,32 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const selling_id = `B${match[1].padStart(3, '0')}`; // 标准格式为 B+三位数字
+      const selling_id = `B${match[1].padStart(3, '0')}`;
 
-      // 同一个编号，只记录第一个留言者
       if (matchedIds.has(selling_id)) {
         skipped++;
         continue;
       }
 
       try {
-        await db.collection('triggered_comments').add({
-          comment_id,
-          post_id,
-          user_id: from.id || '',
-          user_name: from.name || '',
-          selling_id,
-          category: 'B',
-          product_name: '',
-          price: 0,
-          price_fmt: '',
-          created_time,
-          replied: false,
-        });
+        const user_id = from.id || '';
+        const user_name = from.name || '匿名';
+
+        await db.collection('triggered_comments')
+          .doc(`${selling_id}_${comment_id}`)
+          .set({
+            comment_id,
+            post_id,
+            user_id,
+            user_name,
+            selling_id,
+            category: 'B',
+            product_name: '',
+            price: 0,
+            price_fmt: '',
+            created_time,
+            replied: false,
+          });
 
         matchedIds.add(selling_id);
         success++;
