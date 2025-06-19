@@ -45,48 +45,27 @@ export default async function handler(req, res) {
       skipped = 0,
       failed = 0;
 
-    const matchedIds = new Set();
+    const savedUserIds = new Set();
 
     for (const comment of allComments) {
       const { message, from, id: comment_id, created_time } = comment;
 
-      if (!message || !from || from.id === PAGE_ID) {
-        skipped++;
-        continue;
-      }
-
-      const cleanMessage = message.toUpperCase().replace(/\s+/g, '');
-      const match = cleanMessage.match(/\bB(\d{1,3})\b/);
-
-      if (!match) {
-        skipped++;
-        continue;
-      }
-
-      const number = match[1].padStart(3, '0');
-      const selling_id = `B${number}`;
-
-      if (matchedIds.has(selling_id)) {
+      if (!message || !from || from.id === PAGE_ID || savedUserIds.has(from.id)) {
         skipped++;
         continue;
       }
 
       try {
-        await db.collection('triggered_comments').doc(selling_id).set({
+        await db.collection('triggered_comments').doc(comment_id).set({
           comment_id,
           post_id,
           user_id: from.id,
           user_name: from.name || '',
-          selling_id,
-          category: 'B',
-          product_name: '',
-          price: 0,
-          price_fmt: '',
+          message,
           created_time,
           replied: false,
         });
-
-        matchedIds.add(selling_id);
+        savedUserIds.add(from.id);
         success++;
       } catch (err) {
         console.error('❌ 写入失败:', err);
@@ -95,7 +74,7 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      message: '识别完成 ✅',
+      message: '识别完成',
       post_id,
       success,
       skipped,
