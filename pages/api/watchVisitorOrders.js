@@ -25,10 +25,10 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // ✅ 删除旧订单
+    // 删除旧订单（同一个 post_id 的）
     const existingOrders = await db.collection('orders').where('post_id', '==', post_id).get();
     const batch = db.batch();
-    existingOrders.forEach((doc) => batch.delete(doc.ref));
+    existingOrders.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
 
     const allComments = [];
@@ -41,9 +41,7 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
-    let success = 0,
-      skipped = 0,
-      failed = 0;
+    let success = 0, skipped = 0, failed = 0;
 
     const productsRef = db.collection('live_products');
     const productSnapshot = await productsRef.where('post_id', '==', post_id).get();
@@ -82,10 +80,7 @@ export default async function handler(req, res) {
         const isB = matched.category?.toUpperCase() === 'B';
 
         if (isB) {
-          const bQuery = await ordersRef
-            .where('selling_id', '==', matched.selling_id)
-            .limit(1)
-            .get();
+          const bQuery = await ordersRef.where('selling_id', '==', matched.selling_id).limit(1).get();
           if (!bQuery.empty) {
             skipped++;
             continue;
