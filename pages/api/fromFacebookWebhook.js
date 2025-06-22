@@ -1,3 +1,5 @@
+// pages/api/fromFacebookWebhook.js
+
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -56,16 +58,23 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // 写入 debug_comments 方便调试
+        const user_id = from?.id || '';
+        const user_name = from?.name || '匿名用户';
+        const safe_from = {
+          id: user_id,
+          name: user_name
+        };
+
+        // 写入 debug_comments 所有留言
         await db.collection('debug_comments').add({
           comment_id,
           message,
-          from,
+          from: safe_from,
           created_time,
           post_id
         });
 
-        // 检查是否 A 或 B 编号（支持 A1、B01、B 88、a001）
+        // 检查留言格式是否为 A 或 B 类编号
         const matched = message?.toUpperCase().match(/([AB])\s*\d{1,3}/);
         if (!matched) {
           skipped++;
@@ -73,13 +82,13 @@ export default async function handler(req, res) {
         }
 
         const rawType = matched[1]; // A 或 B
-        const selling_id = rawType + matched[0].replace(/\D/g, '').padStart(3, '0');
+        const selling_id = rawType + matched[0].replace(/\D/g, '').padStart(3, '0'); // 例如 B 8 → B008
         const category = rawType;
 
         await db.collection('triggered_comments').add({
           comment_id,
           created_at: created_time,
-          from,
+          from: safe_from,
           post_id,
           selling_id,
           status: 'pending',
@@ -88,8 +97,8 @@ export default async function handler(req, res) {
           product_name: '',
           price: 0,
           price_fmt: '',
-          user_id: from.id || '',
-          user_name: from.name || '',
+          user_id,
+          user_name,
           category
         });
 
