@@ -25,12 +25,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // 删除旧的商品资料
+    // 删除旧商品资料
     const oldDocs = await db.collection('live_products').get();
     const deletePromises = oldDocs.docs.map(doc => doc.ref.delete());
     await Promise.all(deletePromises);
 
-    // 获取该贴文所有留言
+    // 获取留言
     const allComments = [];
     let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
 
@@ -41,7 +41,8 @@ export default async function handler(req, res) {
       nextPage = data.paging?.next || null;
     }
 
-    const regex = /(A|B)\s*0*(\d{1,3})[\s\-～_]*([^RrMm\n]+)[^\d]*RM\s*([\d,.]+)/i;
+    // ✅ 修正 regex，支持没有 RM 的价格
+    const regex = /(A|B)\s*0*(\d{1,3})[\s\-～_]*([^\d\n]+?)\s*(?:RM)?\s*([\d,.]+)/i;
     let count = 0;
 
     for (const comment of allComments) {
