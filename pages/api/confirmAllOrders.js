@@ -1,4 +1,5 @@
 // pages/api/confirmAllOrders.js
+
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -6,6 +7,7 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
+
 const db = getFirestore();
 
 export default async function handler(req, res) {
@@ -14,66 +16,92 @@ export default async function handler(req, res) {
   }
 
   try {
-    const snapshot = await db.collection('debug_comments').get();
-    let success = 0, skipped = 0;
+    const debugSnap = await db.collection('debug_comments').orderBy('created_time').get();
+    const triggeredSnap = await db.collection('triggered_comments').get();
+    const liveSnap = await db.collection('live_products').get();
 
-    for (const doc of snapshot.docs) {
+    const triggeredMap = new Map(); // key: selling_id + user_id
+    triggeredSnap.docs.forEach(doc => {
       const data = doc.data();
-      const { message = '', comment_id, created_at, post_id, from } = data;
+      triggeredMap.set(`${data.selling_id}_${data.user_id}`, true);
+    });
+
+    const liveProducts = {}; // key: selling_id → product info
+    liveSnap.docs.forEach(doc => {
+      liveProducts[doc.id] = doc.data();
+    });
+
+    const count = { success: 0, skipped: 0 };
+    const firstBuyerMap = {}; // key: selling_id → user_id
+
+    for (const doc of debugSnap.docs) {
+      const data = doc.data();
+      const { message, comment_id, created_time, from, post_id } = data;
       const user_id = from?.id;
       const user_name = from?.name || '匿名用户';
 
-      const normalized = message.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const match = normalized.match(/^([AB])0*(\\d{1,3})$/);
+      if (!message || !user_id) {
+        count.skipped++;
+        continue;
+      }
+
+      const match = message.toUpperCase().match(/([AB])\s*0*(\d{1,3})/);
       if (!match) {
-        skipped++;
+        count.skipped++;
         continue;
       }
 
       const category = match[1];
       const number = match[2].padStart(3, '0');
-      const selling_id = category + number;
+      const selling_id = `${category}${number}`;
+      const key = `${selling_id}_${user_id}`;
 
-      const productRef = db.collection('live_products').doc(selling_id);
-      const productSnap = await productRef.get();
-      if (!productSnap.exists) {
-        skipped++;
+      // 是否已写入？
+      if (triggeredMap.has(key)) {
+        count.skipped++;
         continue;
       }
 
-      const product = productSnap.data();
-
-      if (product.category === 'B') {
-        const exists = await db.collection('triggered_comments')
-          .where('selling_id', '==', selling_id).limit(1).get();
-        if (!exists.empty) {
-          skipped++;
-          continue;
-        }
+      // 找不到商品资料
+      const product = liveProducts[selling_id];
+      if (!product) {
+        count.skipped++;
+        continue;
       }
 
-      await db.collection('triggered_comments').doc(comment_id).set({
+      // B 类：只认第一位
+      if (category === 'B') {
+        if (firstBuyerMap[selling_id]) {
+          count.skipped++;
+          continue;
+        }
+        firstBuyerMap[selling_id] = user_id;
+      }
+
+      await db.collection('triggered_comments').add({
+        comment_id,
+        created_at: created_time,
+        from,
+        post_id,
+        selling_id,
+        status: 'pending',
+        replied: false,
+        sent_at: '',
+        product_name: product.product_name || '',
+        price: product.price || 0,
+        price_fmt: product.price_fmt || '',
         user_id,
         user_name,
-        comment_id,
-        post_id,
-        created_time: created_at,
-        selling_id,
-        category,
-        product_name: product.product_name,
-        price: product.price,
-        price_fmt: product.price_fmt,
-        replied: false,
-        status: 'pending',
-        sent_at: ''
+        category
       });
 
-      success++;
+      triggeredMap.set(key, true);
+      count.success++;
     }
 
-    return res.status(200).json({ message: '批量写入完成', success, skipped });
+    return res.status(200).json({ message: '订单写入完成', ...count });
   } catch (err) {
-    console.error('❌ 批量写入失败', err);
+    console.error('[写入订单失败]', err);
     return res.status(500).json({ error: '处理失败', detail: err.message });
   }
 }
