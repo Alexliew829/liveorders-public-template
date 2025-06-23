@@ -70,14 +70,20 @@
     .small-btn:hover {
       background-color: #1a6f1a;
     }
+    select {
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
   <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
+    <select id="postSelect"></select>
     <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
-    <button class="action-button" onclick="confirmOrders()">📝 写入订单留言</button>
+    <button class="action-button" onclick="confirmAllOrders()">✅ 写入所有订单</button>
     <button class="action-button" onclick="autoSendPaymentLinks()">📬 自动发送付款连接</button>
     <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
     <button class="action-button" onclick="exportOrders()">📤 导出订单 Excel</button>
@@ -99,27 +105,33 @@
   </div>
 
   <script>
-    let latestPostId = '';
+    let selectedPostId = '';
 
-    async function getLatestPostId() {
+    async function getRecentPosts() {
       try {
-        const res = await fetch('api/getLatestPostId');
+        const res = await fetch('api/getRecentPosts');
         const data = await res.json();
-        if (data.post_id) {
-          latestPostId = data.post_id;
-        } else {
-          alert('无法获取最新贴文 ID：' + JSON.stringify(data));
-        }
+        const select = document.getElementById('postSelect');
+        select.innerHTML = '';
+
+        data.posts.forEach(post => {
+          const option = document.createElement('option');
+          option.value = post.id;
+          option.text = `${post.created_time.slice(0,10)} - ${post.message.slice(0,30)}`;
+          select.appendChild(option);
+        });
+
+        selectedPostId = select.value;
+        select.onchange = () => selectedPostId = select.value;
       } catch (err) {
-        alert('获取贴文 ID 失败：' + err.message);
+        alert('无法获取贴文列表：' + err.message);
       }
     }
 
     async function startOrderListener() {
-      if (!latestPostId) await getLatestPostId();
-      if (!latestPostId) return;
+      if (!selectedPostId) return alert('请选择贴文');
       try {
-        const res = await fetch(`api/startOrderListener?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch(`api/startOrderListener?post_id=${selectedPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('记录商品完成：' + JSON.stringify(data));
       } catch (err) {
@@ -127,23 +139,21 @@
       }
     }
 
-    async function confirmOrders() {
-      if (!latestPostId) await getLatestPostId();
-      if (!latestPostId) return;
+    async function confirmAllOrders() {
+      if (!selectedPostId) return alert('请选择贴文');
       try {
-        const res = await fetch(`api/confirmAllOrders?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch(`api/confirmAllOrders?post_id=${selectedPostId}`, { method: 'POST' });
         const data = await res.json();
-        alert('订单留言已写入：' + JSON.stringify(data));
+        alert('订单写入完成：' + JSON.stringify(data));
       } catch (err) {
-        alert('写入订单失败：' + err.message);
+        alert('订单写入失败：' + err.message);
       }
     }
 
     async function autoSendPaymentLinks() {
-      if (!latestPostId) await getLatestPostId();
-      if (!latestPostId) return;
+      if (!selectedPostId) return alert('请选择贴文');
       try {
-        const res = await fetch(`api/sendPaymentLink?post_id=${latestPostId}`, { method: 'POST' });
+        const res = await fetch(`api/sendPaymentLink?post_id=${selectedPostId}`, { method: 'POST' });
         const data = await res.json();
         alert('自动发送完成：' + JSON.stringify(data));
       } catch (err) {
@@ -217,7 +227,7 @@
       }
     }
 
-    getLatestPostId(); // 页面加载时自动执行
+    getRecentPosts(); // 页面加载时自动执行
   </script>
 </body>
 </html>
