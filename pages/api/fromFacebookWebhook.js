@@ -1,5 +1,3 @@
-// pages/api/fromFacebookWebhook.js
-
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -14,7 +12,6 @@ const PAGE_ID = process.env.PAGE_ID;
 const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN;
 
 export default async function handler(req, res) {
-  // Webhook 验证（GET）
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -27,7 +24,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // 留言处理（POST）
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '只允许 GET 或 POST 请求' });
   }
@@ -50,9 +46,8 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const { id: comment_id, message, created_time, from, post_id } = comment;
+        const { id: comment_id, message = '', created_time, from, post_id } = comment;
 
-        // 忽略主页自己留言
         if (!from || from.id === PAGE_ID) {
           skipped++;
           continue;
@@ -60,13 +55,10 @@ export default async function handler(req, res) {
 
         const user_id = from?.id || '';
         const user_name = from?.name || '匿名用户';
-        const safe_from = {
-          id: user_id,
-          name: user_name
-        };
+        const safe_from = { id: user_id, name: user_name };
 
-        // 写入 debug_comments 所有留言
-        await db.collection('debug_comments').add({
+        // 写入调试记录
+        await db.collection('debug_comments').doc(comment_id).set({
           comment_id,
           message,
           from: safe_from,
@@ -74,39 +66,62 @@ export default async function handler(req, res) {
           post_id
         });
 
-        // 检查留言格式是否为 A 或 B 类编号
-        const matched = message?.toUpperCase().match(/([AB])\s*\d{1,3}/);
-        if (!matched) {
+        // 标准化留言
+        const normalized = message.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const match = normalized.match(/^([AB])0*(\d{1,3})$/);
+        if (!match) {
           skipped++;
           continue;
         }
 
-        const rawType = matched[1]; // A 或 B
-        const selling_id = rawType + matched[0].replace(/\D/g, '').padStart(3, '0'); // 例如 B 8 → B008
-        const category = rawType;
+        const category = match[1];
+        const number = match[2].padStart(3, '0');
+        const selling_id = category + number;
 
-        await db.collection('triggered_comments').add({
-          comment_id,
-          created_at: created_time,
-          from: safe_from,
-          post_id,
-          selling_id,
-          status: 'pending',
-          replied: false,
-          sent_at: '',
-          product_name: '',
-          price: 0,
-          price_fmt: '',
+        // 检查商品是否存在
+        const productRef = db.collection('live_products').doc(selling_id);
+        const productSnap = await productRef.get();
+        if (!productSnap.exists) {
+          skipped++;
+          continue;
+        }
+        const product = productSnap.data();
+
+        // B 类只允许一人下单
+        if (product.category === 'B') {
+          const existing = await db.collection('triggered_comments')
+            .where('selling_id', '==', selling_id)
+            .limit(1)
+            .get();
+          if (!existing.empty) {
+            skipped++;
+            continue;
+          }
+        }
+
+        // 写入 triggered_comments（使用 comment_id 去重）
+        await db.collection('triggered_comments').doc(comment_id).set({
           user_id,
           user_name,
-          category
+          from: safe_from,
+          comment_id,
+          post_id,
+          created_time,
+          selling_id,
+          category,
+          product_name: product.product_name,
+          price: product.price,
+          price_fmt: product.price_fmt,
+          status: 'pending',
+          replied: false,
+          sent_at: ''
         });
 
         success++;
       }
     }
 
-    return res.status(200).json({ message: '识别完成', success, skipped });
+    return res.status(200).json({ message: '留言识别完成', success, skipped });
   } catch (err) {
     console.error('❌ Webhook 错误：', err);
     return res.status(500).json({ error: '处理失败', detail: err.message });
