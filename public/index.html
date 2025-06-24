@@ -1,80 +1,50 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>订单系统</title>
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Payment">
 
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-
-const db = getFirestore();
-const PAGE_ID = process.env.PAGE_ID;
-const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
-
-export default async function handler(req, res) {
-  const isDebug = req.query.debug !== undefined;
-
-  if (req.method !== 'POST' && !isDebug) {
-    return res.status(405).json({ error: '只允许 POST 请求' });
-  }
-
-  try {
-    // 获取最新贴文 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
-
-    if (!post_id) {
-      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      padding-top: 60px;
     }
-
-    // ✅ 清空 live_products 表
-    const snapshot = await db.collection('live_products').get();
-    const batch = db.batch();
-    snapshot.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-
-    // 获取留言（只处理主页自己留言）
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
-    const commentData = await commentRes.json();
-    const comments = commentData?.data || [];
-
-    let count = 0;
-
-    for (const comment of comments) {
-      const { message, id: comment_id, from } = comment;
-      if (!message || !from || from.id !== PAGE_ID) continue;
-
-      // 提取编号（如 B01、A 32、b-5 等）
-      const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
-      if (!match) continue;
-
-      const type = match[1].toUpperCase();
-      const number = match[2].padStart(3, '0');
-      const selling_id = `${type}${number}`;
-
-      // 提取最后一个有效价格（如 RM1234.56）
-      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
-      if (!priceMatch) continue;
-
-      const price = parseFloat(priceMatch[1].replace(/,/g, ''));
-
-      // 写入 Firestore
-      await db.collection('live_products').doc(selling_id).set({
-        selling_id,
-        product_name: message.replace(/\s*RM[\d,]+\.\d{2}$/i, '').trim(),
-        price,
-        post_id,
-        created_at: new Date().toISOString(),
-      });
-
-      count++;
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
     }
-
-    return res.status(200).json({ status: '写入完成', products_saved: count });
-
-  } catch (err) {
-    console.error('错误：', err);
-    return res.status(500).json({ error: '执行失败', message: err.message });
-  }
-}
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .action-button {
+      padding: 18px 32px;
+      font-size: 20px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+    #orderSection {
+      margin-top: 50px;
+      padding: 0 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
