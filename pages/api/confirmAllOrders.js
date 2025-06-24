@@ -22,59 +22,71 @@ export default async function handler(req, res) {
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
-    if (!post_id) return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+    if (!post_id) {
+      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+    }
 
     // 获取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
 
-    const liveSnap = await db.collection('live_products').get();
-    const liveMap = new Map();
-    liveSnap.forEach(doc => {
-      const data = doc.data();
-      liveMap.set(doc.id, data);
-    });
+    // 获取商品清单（判断 A/B 类型）
+    const productsSnap = await db.collection('live_products').get();
+    const productsMap = {};
+    for (const doc of productsSnap.docs) {
+      productsMap[doc.id] = doc.data();
+    }
 
-    let success = 0, skipped = 0;
+    let success = 0;
+    let skipped = 0;
+
     for (const comment of comments) {
       const { message, from, id: comment_id } = comment;
-      if (!message || !from || !from.id || from.id === PAGE_ID) continue;
+      if (!message || !from || from.id === PAGE_ID) continue;
 
-      const match = message.match(/\b([AB])[\-_.~ ]*0*(\d{1,3})\b/i);
+      // 提取编号（宽容前后最多两个字/符号）
+      const match = message.match(/.{0,2}([AB])[ \-_.~]*0*(\d{1,3}).{0,2}/i);
       if (!match) continue;
+
       const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
-      const product = liveMap.get(selling_id);
-      if (!product) continue;
 
-      const orderRef = db.collection('triggered_comments').doc(comment_id);
-      const existing = await orderRef.get();
-      if (existing.exists) {
+      const product = productsMap[selling_id];
+      if (!product) {
         skipped++;
         continue;
       }
 
+      // 检查是否已存在订单
       if (type === 'B') {
-        // B 类只允许一人
-        const sameProduct = await db.collection('triggered_comments').where('selling_id', '==', selling_id).limit(1).get();
-        if (!sameProduct.empty) {
+        const existing = await db.collection('triggered_comments').doc(selling_id).get();
+        if (existing.exists) {
+          skipped++;
+          continue;
+        }
+      } else if (type === 'A') {
+        const dup = await db.collection('triggered_comments')
+          .where('selling_id', '==', selling_id)
+          .where('user_id', '==', from.id)
+          .get();
+        if (!dup.empty) {
           skipped++;
           continue;
         }
       }
 
-      await orderRef.set({
+      // 写入订单
+      await db.collection('triggered_comments').add({
+        selling_id,
+        product_name: product.product_name,
         user_id: from.id,
         user_name: from.name || '',
         comment_id,
-        selling_id,
-        product_name: product.product_name,
-        price: product.price,
-        price_fmt: `RM ${product.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         post_id,
         created_at: new Date().toISOString(),
+        payment_url: '',
         replied: false
       });
       success++;
@@ -82,7 +94,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ message: '订单写入完成', success, skipped });
   } catch (err) {
-    console.error('执行失败:', err);
+    console.error('执行失败：', err);
     return res.status(500).json({ error: '执行失败', message: err.message });
   }
 }
