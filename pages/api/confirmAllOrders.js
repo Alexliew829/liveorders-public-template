@@ -1,12 +1,6 @@
+// pages/api/confirmAllOrders.js
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import {
-  getFirestore,
-  collection,
-  getDocs,
-  addDoc,
-  query,
-  where
-} from 'firebase-admin/firestore';
+import { getFirestore, collection, getDocs, addDoc, query, where } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
@@ -20,13 +14,12 @@ const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Only POST requests allowed' });
+    return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
   try {
-    const postRes = await fetch(
-      `https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`
-    );
+    // 获取最新贴文 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
 
@@ -34,21 +27,18 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    const commentsRes = await fetch(
-      `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=200&fields=from,message,created_time`
-    );
+    // 获取贴文留言
+    const commentsRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=200&fields=from,message,created_time`);
     const commentsData = await commentsRes.json();
     const comments = commentsData?.data || [];
 
-    const existingSnap = await getDocs(
-      query(collection(db, 'triggered_comments'), where('post_id', '==', post_id))
-    );
+    // 读取旧订单（相同直播）避免重复写入
+    const existingSnap = await getDocs(query(collection(db, 'triggered_comments'), where('post_id', '==', post_id)));
     const existing = existingSnap.docs.map(doc => doc.data());
 
-    const productsSnap = await getDocs(
-      query(collection(db, 'live_products'), where('post_id', '==', post_id))
-    );
-    const products = productsSnap.docs.map(doc => doc.data());
+    // 提取所有商品编号（已写入的）
+    const liveProductsSnap = await getDocs(query(collection(db, 'live_products'), where('post_id', '==', post_id)));
+    const products = liveProductsSnap.docs.map(doc => doc.data());
 
     let success = 0;
     let skipped = 0;
@@ -59,9 +49,10 @@ export default async function handler(req, res) {
       const msg = c.message?.toUpperCase() || '';
 
       if (!fromId || !msg) continue;
-      if (fromId === PAGE_ID) continue;
+      if (fromId === PAGE_ID) continue; // 跳过管理员留言
 
-      const match = msg.match(/.{0,3}\b([AB])\s*[-_~.]*\s*0*(\d{1,3})\b.{0,3}/i);
+      // 匹配前后可有2个字干扰，例如“我要B01”、“B01咯”，允许空格和符号
+      const match = msg.match(/.{0,2}(A|B)[\s\-_.～]*0*(\d{1,3}).{0,2}/i);
       if (!match) continue;
 
       const type = match[1].toUpperCase();
@@ -69,10 +60,12 @@ export default async function handler(req, res) {
       const selling_id = `${type}${number}`;
 
       const product = products.find(p => p.selling_id === selling_id);
-      if (!product) continue;
+      if (!product) {
+        skipped++;
+        continue;
+      }
 
       const exists = existing.find(e => e.selling_id === selling_id && e.user_id === fromId);
-
       if (product.type === 'B') {
         const bExists = existing.find(e => e.selling_id === selling_id);
         if (bExists) {
