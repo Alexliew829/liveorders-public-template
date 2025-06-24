@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, collection, getDocs, addDoc, query, where } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
@@ -31,12 +31,14 @@ export default async function handler(req, res) {
     const commentsData = await commentsRes.json();
     const comments = commentsData?.data || [];
 
+    console.log('留言总数：', comments.length);
+
     // 读取旧订单（相同直播）避免重复写入
-    const existingSnap = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
+    const existingSnap = await getDocs(query(collection(db, 'triggered_comments'), where('post_id', '==', post_id)));
     const existing = existingSnap.docs.map(doc => doc.data());
 
     // 提取所有商品编号（已写入的）
-    const liveProductsSnap = await db.collection('live_products').where('post_id', '==', post_id).get();
+    const liveProductsSnap = await getDocs(query(collection(db, 'live_products'), where('post_id', '==', post_id)));
     const products = liveProductsSnap.docs.map(doc => doc.data());
 
     let success = 0;
@@ -50,11 +52,14 @@ export default async function handler(req, res) {
       if (!fromId || !msg) continue;
       if (fromId === PAGE_ID) continue; // 跳过管理员留言
 
-      // 匹配格式：前后各可加两个字母干扰，如“我要B01”、“B01咯”
-      const match = msg.match(/.{0,2}(B\s*-*0*\d{1,3}).{0,2}/i);
+      // 匹配格式：前后各可加两个干扰字符，支持 A 和 B 商品
+      const match = msg.match(/.{0,2}([AB])\s*-*0*(\d{1,3}).{0,2}/i);
       if (!match) continue;
 
-      const selling_id = match[1].replace(/\s|-/g, '').toUpperCase();
+      const type = match[1].toUpperCase();
+      const number = match[2].padStart(3, '0');
+      const selling_id = `${type}${number}`;
+
       const product = products.find(p => p.selling_id === selling_id);
       if (!product) continue;
 
@@ -72,7 +77,7 @@ export default async function handler(req, res) {
         }
       }
 
-      await db.collection('triggered_comments').add({
+      await addDoc(collection(db, 'triggered_comments'), {
         post_id,
         selling_id,
         user_id: fromId,
@@ -82,13 +87,12 @@ export default async function handler(req, res) {
         created_time: c.created_time,
         replied: false
       });
+
       success++;
     }
 
     return res.status(200).json({ message: '订单写入完成', success, skipped });
-
   } catch (err) {
-    console.error('写入失败:', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
