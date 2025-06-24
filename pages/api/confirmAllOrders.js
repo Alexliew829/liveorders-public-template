@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, collection, getDocs, addDoc, query, where } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
@@ -17,7 +17,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -26,19 +25,14 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // 获取贴文留言
     const commentsRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=200&fields=from,message,created_time`);
     const commentsData = await commentsRes.json();
     const comments = commentsData?.data || [];
 
-    console.log('留言总数：', comments.length);
-
-    // 读取旧订单（相同直播）避免重复写入
-    const existingSnap = await getDocs(query(collection(db, 'triggered_comments'), where('post_id', '==', post_id)));
+    const existingSnap = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
     const existing = existingSnap.docs.map(doc => doc.data());
 
-    // 提取所有商品编号（已写入的）
-    const liveProductsSnap = await getDocs(query(collection(db, 'live_products'), where('post_id', '==', post_id)));
+    const liveProductsSnap = await db.collection('live_products').where('post_id', '==', post_id).get();
     const products = liveProductsSnap.docs.map(doc => doc.data());
 
     let success = 0;
@@ -50,16 +44,12 @@ export default async function handler(req, res) {
       const msg = c.message?.toUpperCase() || '';
 
       if (!fromId || !msg) continue;
-      if (fromId === PAGE_ID) continue; // 跳过管理员留言
+      if (fromId === PAGE_ID) continue;
 
-      // 匹配格式：前后各可加两个干扰字符，支持 A 和 B 商品
-      const match = msg.match(/.{0,2}([AB])\s*-*0*(\d{1,3}).{0,2}/i);
+      const match = msg.match(/.{0,2}(B\s*-*0*\d{1,3}).{0,2}/i);
       if (!match) continue;
 
-      const type = match[1].toUpperCase();
-      const number = match[2].padStart(3, '0');
-      const selling_id = `${type}${number}`;
-
+      const selling_id = match[1].replace(/\s|-/g, '').toUpperCase();
       const product = products.find(p => p.selling_id === selling_id);
       if (!product) continue;
 
@@ -77,7 +67,7 @@ export default async function handler(req, res) {
         }
       }
 
-      await addDoc(collection(db, 'triggered_comments'), {
+      await db.collection('triggered_comments').add({
         post_id,
         selling_id,
         user_id: fromId,
@@ -87,7 +77,6 @@ export default async function handler(req, res) {
         created_time: c.created_time,
         replied: false
       });
-
       success++;
     }
 
