@@ -51,8 +51,9 @@ export default async function handler(req, res) {
       const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
       if (!priceMatch) continue;
 
-      const price = parseFloat(priceMatch[1].replace(/,/g, ''));
-      const formattedPrice = price.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+      const price_raw = priceMatch[1];
+      const price = parseFloat(price_raw.replace(/,/g, ''));
+      const price_fmt = price.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
       // 写入 Firestore
       await db.collection('live_products').doc(selling_id).set({
@@ -60,7 +61,9 @@ export default async function handler(req, res) {
         type,
         number,
         product_name: message.replace(/\s*RM[\d,]+\.\d{2}$/i, '').trim(), // 删除尾部 RM价格文字
-        price: formattedPrice,
+        price,         // 数字，用于计算
+        price_raw,     // 原始字符串（如 "3232.32"）
+        price_fmt,     // 格式化字符串（如 "3,232.32"）
         raw_message: message,
         created_at: new Date().toISOString(),
         post_id,
