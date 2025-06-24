@@ -10,12 +10,12 @@ if (!getApps().length) {
 const db = getFirestore();
 
 function formatPrice(priceStr) {
-  // 移除千分位逗号，转成浮点数
-  return parseFloat(priceStr.replace(/,/g, '')) || 0;
+  return parseFloat((priceStr || '').replace(/,/g, '')) || 0;
 }
 
 export default async function handler(req, res) {
   try {
+    // Step 1: 读取 live_products 所有商品
     const productsSnap = await db.collection('live_products').get();
     const products = {};
     productsSnap.forEach(doc => {
@@ -24,11 +24,12 @@ export default async function handler(req, res) {
       products[id] = {
         id,
         title: data.product_name || '',
-        price: formatPrice(data.price || '0'),
-        type: (data.type || 'B').toUpperCase(),
+        price: formatPrice(data.price_raw || data.price || '0'),
+        type: (data.type || 'B').toUpperCase(), // 默认 B 类
       };
     });
 
+    // Step 2: 读取访客留言
     const commentsSnap = await db.collection('triggered_comments').get();
     const allOrders = [];
     const writtenB = new Set();
@@ -39,15 +40,15 @@ export default async function handler(req, res) {
       const userId = data.user_id;
       const product = products[sid];
 
-      if (!product) return;
+      if (!product) return; // 无对应商品，跳过
 
-      // B 类：只认第一个留言者
+      // B 类只允许第一人
       if (product.type === 'B') {
         if (writtenB.has(sid)) return;
         writtenB.add(sid);
       }
 
-      const order = {
+      allOrders.push({
         product_id: sid,
         product_title: product.title,
         product_price: product.price,
@@ -58,11 +59,10 @@ export default async function handler(req, res) {
         created_time: data.created_time || '',
         paid: false,
         replied: false,
-      };
-
-      allOrders.push(order);
+      });
     });
 
+    // Step 3: 批次写入 orders 表
     const batch = db.batch();
     const ordersRef = db.collection('orders');
     allOrders.forEach(order => {
@@ -74,9 +74,11 @@ export default async function handler(req, res) {
     res.status(200).json({
       message: '订单写入完成',
       success: allOrders.length,
-      skipped: commentsSnap.size - allOrders.length,
+      skipped: commentsSnap.docs.length - allOrders.length,
     });
+
   } catch (err) {
+    console.error('❌ 执行失败：', err);
     res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
