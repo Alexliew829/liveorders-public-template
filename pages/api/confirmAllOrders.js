@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, collection, getDocs, addDoc, query, where, deleteDoc, doc } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
@@ -32,11 +32,11 @@ export default async function handler(req, res) {
     const comments = commentsData?.data || [];
 
     // 读取旧订单（相同直播）避免重复写入
-    const existingSnap = await getDocs(query(collection(db, 'triggered_comments'), where('post_id', '==', post_id)));
+    const existingSnap = await db.collection('triggered_comments').where('post_id', '==', post_id).get();
     const existing = existingSnap.docs.map(doc => doc.data());
 
     // 提取所有商品编号（已写入的）
-    const liveProductsSnap = await getDocs(query(collection(db, 'live_products'), where('post_id', '==', post_id)));
+    const liveProductsSnap = await db.collection('live_products').where('post_id', '==', post_id).get();
     const products = liveProductsSnap.docs.map(doc => doc.data());
 
     let success = 0;
@@ -60,21 +60,19 @@ export default async function handler(req, res) {
 
       const exists = existing.find(e => e.selling_id === selling_id && e.user_id === fromId);
       if (product.type === 'B') {
-        // B类商品：只允许第一位留言者
         const bExists = existing.find(e => e.selling_id === selling_id);
         if (bExists) {
           skipped++;
           continue;
         }
       } else {
-        // A类商品：同一顾客不可重复下单同一商品
         if (exists) {
           skipped++;
           continue;
         }
       }
 
-      await addDoc(collection(db, 'triggered_comments'), {
+      await db.collection('triggered_comments').add({
         post_id,
         selling_id,
         user_id: fromId,
@@ -88,7 +86,9 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ message: '订单写入完成', success, skipped });
+
   } catch (err) {
+    console.error('写入失败:', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
