@@ -33,15 +33,18 @@ export default async function handler(req, res) {
 
     for (const c of comments) {
       const message = c.message || '';
+
+      // 🚫 跳过主页留言
+      if (c.from?.id === PAGE_ID) continue;
+
+      // ✅ 识别 A/B 类商品留言
       const match = message.match(/\b([ABab])\s?0*(\d{1,3})\b/);
       if (!match) continue;
 
       const selling_id = `${match[1].toUpperCase()}${match[2].padStart(3, '0')}`;
       const comment_id = c.id;
-      const user_id = c.from?.id ?? null;
-      const user_name = c.from?.name ?? '';
-
-      if (!user_id || user_id === PAGE_ID) continue; // 排除主页留言或未知用户
+      const user_id = c.from?.id || '';
+      const user_name = c.from?.name || '';
 
       const ref = db.collection('triggered_comments').doc(comment_id);
       const exists = await ref.get();
@@ -60,7 +63,7 @@ export default async function handler(req, res) {
       count++;
     }
 
-    return res.status(200).json({ message: '写入完成', total: count });
+    return res.status(200).json({ message: '订单写入完成', success: count });
   } catch (err) {
     return res.status(500).json({ error: '写入失败', details: err.message });
   }
