@@ -9,27 +9,33 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
-function formatPrice(priceStr) {
-  return parseFloat((priceStr || '').replace(/,/g, '')) || 0;
+// 强化处理：无论传入什么都能解析价格
+function formatPrice(input) {
+  if (typeof input === 'number') return input;
+  const str = (input || '').toString();
+  return parseFloat(str.replace(/,/g, '')) || 0;
 }
 
 export default async function handler(req, res) {
   try {
-    // Step 1: 读取 live_products 所有商品
     const productsSnap = await db.collection('live_products').get();
     const products = {};
     productsSnap.forEach(doc => {
       const data = doc.data();
       const id = (data.selling_id || doc.id || '').toUpperCase();
+      const rawPrice = data.price_raw ?? data.price ?? '0';
+      const price = formatPrice(rawPrice);
+      const fmtPrice = price.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+
       products[id] = {
         id,
         title: data.product_name || '',
-        price: formatPrice(data.price_raw || data.price || '0'),
-        type: (data.type || 'B').toUpperCase(), // 默认 B 类
+        price_raw: price,
+        price_fmt: fmtPrice,
+        type: (data.type || 'B').toUpperCase(),
       };
     });
 
-    // Step 2: 读取访客留言
     const commentsSnap = await db.collection('triggered_comments').get();
     const allOrders = [];
     const writtenB = new Set();
@@ -40,18 +46,19 @@ export default async function handler(req, res) {
       const userId = data.user_id;
       const product = products[sid];
 
-      if (!product) return; // 无对应商品，跳过
+      if (!product) return;
 
-      // B 类只允许第一人
+      // B 类只认第一位顾客
       if (product.type === 'B') {
         if (writtenB.has(sid)) return;
         writtenB.add(sid);
       }
 
-      allOrders.push({
+      const order = {
         product_id: sid,
         product_title: product.title,
-        product_price: product.price,
+        product_price: product.price_raw,
+        product_price_fmt: product.price_fmt,
         user_id: userId || '',
         user_name: data.user_name || '',
         comment_id: doc.id,
@@ -59,10 +66,11 @@ export default async function handler(req, res) {
         created_time: data.created_time || '',
         paid: false,
         replied: false,
-      });
+      };
+
+      allOrders.push(order);
     });
 
-    // Step 3: 批次写入 orders 表
     const batch = db.batch();
     const ordersRef = db.collection('orders');
     allOrders.forEach(order => {
@@ -74,11 +82,10 @@ export default async function handler(req, res) {
     res.status(200).json({
       message: '订单写入完成',
       success: allOrders.length,
-      skipped: commentsSnap.docs.length - allOrders.length,
+      skipped: commentsSnap.size - allOrders.length,
     });
 
   } catch (err) {
-    console.error('❌ 执行失败：', err);
     res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
