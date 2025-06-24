@@ -2,17 +2,19 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-const PAGE_ID = process.env.PAGE_ID;
-const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
 
 const db = getFirestore();
+const PAGE_ID = process.env.PAGE_ID;
+const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  const isDebug = req.query.debug !== undefined;
+
+  if (req.method !== 'POST' && !isDebug) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
@@ -21,58 +23,56 @@ export default async function handler(req, res) {
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
-    if (!post_id) {
-      return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
-    }
 
-    // 删除旧商品资料
-    const oldDocs = await db.collection('live_products').get();
-    const deletePromises = oldDocs.docs.map(doc => doc.ref.delete());
-    await Promise.all(deletePromises);
+    if (!post_id) {
+      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+    }
 
     // 获取留言
-    const allComments = [];
-    let nextPage = `https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&fields=id,message,from,created_time&limit=100`;
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
+    const commentData = await commentRes.json();
+    const comments = commentData?.data || [];
 
-    while (nextPage) {
-      const res = await fetch(nextPage);
-      const data = await res.json();
-      allComments.push(...(data.data || []));
-      nextPage = data.paging?.next || null;
-    }
-
-    // ✅ 修正 regex，支持没有 RM 的价格
-    const regex = /(A|B)\s*0*(\d{1,3})[\s\-～_]*([^\d\n]+?)\s*(?:RM)?\s*([\d,.]+)/i;
     let count = 0;
 
-    for (const comment of allComments) {
-      const { message = '', id: comment_id, created_time } = comment;
-      const match = message.match(regex);
+    for (const comment of comments) {
+      const { message, id: comment_id, from } = comment;
+      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页留言
+
+      // 提取编号（A/B + 数字，最多3位，容忍空格/符号）
+      const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
       if (!match) continue;
 
-      const category = match[1].toUpperCase();
+      const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
-      const selling_id = category + number;
-      const product_name = match[3].trim();
-      const price_raw = parseFloat(match[4].replace(/,/g, ''));
-      const price_fmt = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+      const selling_id = `${type}${number}`;
 
+      // 提取价格（仅取最后一个符合格式的数字）
+      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
+      if (!priceMatch) continue;
+
+      const price = parseFloat(priceMatch[1].replace(/,/g, ''));
+      const formattedPrice = price.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+
+      // 写入 Firestore
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
-        category,
-        product_name,
-        price: price_raw,
-        price_fmt,
-        comment_id,
+        type,
+        number,
+        product_name: message.replace(/\s*RM[\d,]+\.\d{2}$/i, '').trim(), // 删除尾部 RM价格文字
+        price: formattedPrice,
+        raw_message: message,
+        created_at: new Date().toISOString(),
         post_id,
-        created_at: created_time
       });
+
       count++;
     }
 
-    return res.status(200).json({ message: '记录商品完成', post_id, total: count });
+    return res.status(200).json({ status: '写入完成', products_saved: count });
+
   } catch (err) {
-    console.error('[记录商品失败]', err);
-    return res.status(500).json({ error: '记录商品失败', detail: err.message });
+    console.error('错误：', err);
+    return res.status(500).json({ error: '执行失败', message: err.message });
   }
 }
