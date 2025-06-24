@@ -9,37 +9,48 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
+function formatPrice(priceStr) {
+  // 移除千分位逗号，转成浮点数
+  return parseFloat(priceStr.replace(/,/g, '')) || 0;
+}
+
 export default async function handler(req, res) {
   try {
     const productsSnap = await db.collection('live_products').get();
     const products = {};
     productsSnap.forEach(doc => {
       const data = doc.data();
-      products[doc.id.toUpperCase()] = { ...data, id: doc.id.toUpperCase() };
+      const id = (data.selling_id || doc.id || '').toUpperCase();
+      products[id] = {
+        id,
+        title: data.product_name || '',
+        price: formatPrice(data.price || '0'),
+        type: (data.type || 'B').toUpperCase(),
+      };
     });
 
     const commentsSnap = await db.collection('triggered_comments').get();
     const allOrders = [];
-    const writtenIds = new Set();
+    const writtenB = new Set();
 
     commentsSnap.forEach(doc => {
       const data = doc.data();
-      const sid = data.selling_id?.toUpperCase();
+      const sid = (data.selling_id || '').toUpperCase();
       const userId = data.user_id;
-
       const product = products[sid];
-      if (!product) return; // 商品不存在
 
-      // B类：只认第一位留言者，避免重复
+      if (!product) return;
+
+      // B 类：只认第一个留言者
       if (product.type === 'B') {
-        if (writtenIds.has(sid)) return;
-        writtenIds.add(sid);
+        if (writtenB.has(sid)) return;
+        writtenB.add(sid);
       }
 
       const order = {
         product_id: sid,
-        product_title: product.title || '',
-        product_price: product.price || 0,
+        product_title: product.title,
+        product_price: product.price,
         user_id: userId || '',
         user_name: data.user_name || '',
         comment_id: doc.id,
@@ -52,12 +63,10 @@ export default async function handler(req, res) {
       allOrders.push(order);
     });
 
-    // 写入 orders
     const batch = db.batch();
     const ordersRef = db.collection('orders');
     allOrders.forEach(order => {
-      const newDoc = ordersRef.doc(order.comment_id);
-      batch.set(newDoc, order);
+      batch.set(ordersRef.doc(order.comment_id), order);
     });
 
     await batch.commit();
