@@ -15,9 +15,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 获取最新贴文 ID
     const PAGE_ID = process.env.PAGE_ID;
     const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
+
+    // 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -40,24 +41,22 @@ export default async function handler(req, res) {
       const user_id = c.from?.id ?? null;
       const user_name = c.from?.name ?? '';
 
+      if (!user_id || user_id === PAGE_ID) continue; // 排除主页留言或未知用户
+
       const ref = db.collection('triggered_comments').doc(comment_id);
       const exists = await ref.get();
       if (exists.exists) continue;
 
-      // 准备写入资料，避免 undefined
-      const data = {
+      await ref.set({
         comment_id,
         post_id,
         selling_id,
         message,
+        user_id,
         user_name,
         created_time: new Date().toISOString(),
-      };
-      if (user_id) {
-        data.user_id = user_id;
-      }
+      });
 
-      await ref.set(data);
       count++;
     }
 
