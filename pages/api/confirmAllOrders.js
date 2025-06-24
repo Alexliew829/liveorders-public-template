@@ -1,8 +1,8 @@
-// pages/api/confirmAllOrders.js
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore, collection, getDocs, addDoc, query, where, deleteDoc, doc } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
@@ -12,9 +12,8 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const isDebug = req.query.debug !== undefined;
-  if (req.method !== 'POST' && !isDebug) {
-    return res.status(405).json({ error: '只允许 POST 请求' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Only POST requests allowed' });
   }
 
   try {
@@ -22,71 +21,67 @@ export default async function handler(req, res) {
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
+
     if (!post_id) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // 获取留言
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
-    const commentData = await commentRes.json();
-    const comments = commentData?.data || [];
+    // 获取贴文留言
+    const commentsRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=200&fields=from,message,created_time`);
+    const commentsData = await commentsRes.json();
+    const comments = commentsData?.data || [];
 
-    // 获取商品清单（判断 A/B 类型）
-    const productsSnap = await db.collection('live_products').get();
-    const productsMap = {};
-    for (const doc of productsSnap.docs) {
-      productsMap[doc.id] = doc.data();
-    }
+    // 读取旧订单（相同直播）避免重复写入
+    const existingSnap = await getDocs(query(collection(db, 'triggered_comments'), where('post_id', '==', post_id)));
+    const existing = existingSnap.docs.map(doc => doc.data());
+
+    // 提取所有商品编号（已写入的）
+    const liveProductsSnap = await getDocs(query(collection(db, 'live_products'), where('post_id', '==', post_id)));
+    const products = liveProductsSnap.docs.map(doc => doc.data());
 
     let success = 0;
     let skipped = 0;
 
-    for (const comment of comments) {
-      const { message, from, id: comment_id } = comment;
-      if (!message || !from || from.id === PAGE_ID) continue;
+    for (const c of comments) {
+      const fromId = c.from?.id;
+      const fromName = c.from?.name;
+      const msg = c.message?.toUpperCase() || '';
 
-      // 提取编号（宽容前后最多两个字/符号）
-      const match = message.match(/.{0,2}([AB])[ \-_.~]*0*(\d{1,3}).{0,2}/i);
+      if (!fromId || !msg) continue;
+      if (fromId === PAGE_ID) continue; // 跳过管理员留言
+
+      // 匹配格式：前后各可加两个字母干扰，如“我要B01”、“B01咯”
+      const match = msg.match(/.{0,2}(B\s*-*0*\d{1,3}).{0,2}/i);
       if (!match) continue;
 
-      const type = match[1].toUpperCase();
-      const number = match[2].padStart(3, '0');
-      const selling_id = `${type}${number}`;
+      const selling_id = match[1].replace(/\s|-/g, '').toUpperCase();
+      const product = products.find(p => p.selling_id === selling_id);
+      if (!product) continue;
 
-      const product = productsMap[selling_id];
-      if (!product) {
-        skipped++;
-        continue;
-      }
-
-      // 检查是否已存在订单
-      if (type === 'B') {
-        const existing = await db.collection('triggered_comments').doc(selling_id).get();
-        if (existing.exists) {
+      const exists = existing.find(e => e.selling_id === selling_id && e.user_id === fromId);
+      if (product.type === 'B') {
+        // B类商品：只允许第一位留言者
+        const bExists = existing.find(e => e.selling_id === selling_id);
+        if (bExists) {
           skipped++;
           continue;
         }
-      } else if (type === 'A') {
-        const dup = await db.collection('triggered_comments')
-          .where('selling_id', '==', selling_id)
-          .where('user_id', '==', from.id)
-          .get();
-        if (!dup.empty) {
+      } else {
+        // A类商品：同一顾客不可重复下单同一商品
+        if (exists) {
           skipped++;
           continue;
         }
       }
 
-      // 写入订单
-      await db.collection('triggered_comments').add({
-        selling_id,
-        product_name: product.product_name,
-        user_id: from.id,
-        user_name: from.name || '',
-        comment_id,
+      await addDoc(collection(db, 'triggered_comments'), {
         post_id,
-        created_at: new Date().toISOString(),
-        payment_url: '',
+        selling_id,
+        user_id: fromId,
+        user_name: fromName,
+        message: c.message,
+        comment_id: c.id,
+        created_time: c.created_time,
         replied: false
       });
       success++;
@@ -94,7 +89,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ message: '订单写入完成', success, skipped });
   } catch (err) {
-    console.error('执行失败：', err);
-    return res.status(500).json({ error: '执行失败', message: err.message });
+    return res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
