@@ -34,10 +34,10 @@ export default async function handler(req, res) {
     for (const c of comments) {
       const message = c.message || '';
 
-      // 🚫 跳过主页留言
+      // 🚫 跳过主页账号留言
       if (c.from?.id === PAGE_ID) continue;
 
-      // ✅ 识别 A/B 类商品留言
+      // ✅ 抓取 A/B 编号
       const match = message.match(/\b([ABab])\s?0*(\d{1,3})\b/);
       if (!match) continue;
 
@@ -46,14 +46,14 @@ export default async function handler(req, res) {
       const user_id = c.from?.id || '';
       const user_name = c.from?.name || '';
 
-      const ref = db.collection('triggered_comments').doc(comment_id);
+      const ref = db.collection('triggered_comments').doc(selling_id);
       const exists = await ref.get();
       if (exists.exists) continue;
 
       await ref.set({
+        selling_id,
         comment_id,
         post_id,
-        selling_id,
         message,
         user_id,
         user_name,
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       count++;
     }
 
-    return res.status(200).json({ message: '订单写入完成', success: count });
+    return res.status(200).json({ message: '访客订单写入完成', success: count });
   } catch (err) {
     return res.status(500).json({ error: '写入失败', details: err.message });
   }
