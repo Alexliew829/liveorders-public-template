@@ -1,3 +1,4 @@
+// ✅ 修正留言提取问题，恢复写入功能，准确排除 RM 而保留商品名
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -40,26 +41,26 @@ export default async function handler(req, res) {
 
     let count = 0;
     for (const { message, from } of comments) {
-      if (!message || !from || from.id === PAGE_ID) continue; // 忽略主页留言
+      if (!message || !from || from.id === PAGE_ID) continue;
 
-      // ✅ 编号识别（A/B + 最多三位数）
+      // ✅ 识别编号
       const match = message.match(/\b([AB])[ \-_.～~]*0*(\d{1,3})\b/i);
       if (!match) continue;
       const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 抓取价格（允许 RM、rm、有无空格）
-      const priceMatch = message.match(/([RMrm]?[ \u00A0]?\d{1,3}(,\d{3})*(\.\d{2}))/);
+      // ✅ 识别价格（例如：RM320、RM 1,280.00、rm1080.50）
+      const priceMatch = message.match(/(?:RM|rm)?[ \u00A0]*([\d,]+\.\d{2})/);
       if (!priceMatch) continue;
-      const price_raw = parseFloat(priceMatch[1].replace(/[^\d.]/g, ''));
+      const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 去除编号和价格后提取商品名（精准）
-      let nameClean = message;
-      nameClean = nameClean.replace(match[0], '');        // 去除编号
-      nameClean = nameClean.replace(priceMatch[0], '');   // 去除价格
-      nameClean = nameClean.trim();                       // 去除空格
+      // ✅ 商品名处理：精确去除编号与价格，不再误删 rm
+      let nameClean = message
+        .replace(/\b([AB])[ \-_.～~]*0*(\d{1,3})\b/i, '')         // 去除编号
+        .replace(/(?:RM|rm)?[ \u00A0]*[\d,]+\.\d{2}/, '')        // 去除价格
+        .trim();
 
       // ✅ 写入 Firestore
       await db.collection('live_products').doc(selling_id).set({
