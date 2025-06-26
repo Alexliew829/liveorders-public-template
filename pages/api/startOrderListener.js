@@ -1,80 +1,74 @@
+// File: pages/api/startOrderListener.js
+
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-const db = getFirestore();
 
+const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
-function extractProductInfo(message) {
-  const pattern = /([ABab][\s-]*0*\d{1,3})[\s\-～_:：]?(.*?)[\s\-～_:：]?[Rr][Mm]?[ \t]*([\d,.]+)/;
-  const match = message.match(pattern);
+function normalizeSellingId(text) {
+  const match = text.match(/[AB]\s*0*([1-9]\d{0,2})/i);
   if (!match) return null;
+  const prefix = text.match(/[AB]/i)[0].toUpperCase();
+  const num = match[1].padStart(3, '0');
+  return prefix + num;
+}
 
-  const selling_id_raw = match[1].replace(/\s|-/g, '').toUpperCase(); // A032 → A032
-  const category = selling_id_raw.startsWith('A') ? 'A' : 'B';
-  const product_name = match[2].trim();
-  const price_raw = parseFloat(match[3].replace(/,/g, ''));
-  const price_fmt = price_raw.toLocaleString('en-MY', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-  return {
-    selling_id: selling_id_raw,
-    category,
-    product_name: `${selling_id_raw} ${product_name}`,
-    price_raw,
-    price: price_fmt,
-  };
+function extractPrice(text) {
+  const match = text.match(/RM?[\s:]?([\d,.]+)/i);
+  if (!match) return null;
+  const raw = parseFloat(match[1].replace(/,/g, ''));
+  const formatted = raw.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return { price: formatted, price_raw: raw };
 }
 
 export default async function handler(req, res) {
   try {
-    // Step 1：取得最新贴文
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
-    if (!post_id) return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+    if (!post_id) return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
 
-    // Step 2：取得留言
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=200`);
-    const commentData = await commentRes.json();
-    const comments = commentData?.data || [];
+    // 清空旧商品资料
+    const productsRef = db.collection('live_products');
+    const old = await productsRef.listDocuments();
+    await Promise.all(old.map(doc => doc.delete()));
 
-    // Step 3：清除旧的商品资料
-    const oldSnapshot = await db.collection('live_products').get();
-    const batchDelete = db.batch();
-    oldSnapshot.forEach(doc => batchDelete.delete(doc.ref));
-    await batchDelete.commit();
+    // 抓取留言
+    const commentsRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
+    const commentsData = await commentsRes.json();
+    const comments = commentsData?.data || [];
 
-    // Step 4：写入新的商品资料（仅主页留言）
-    const filtered = comments.filter(c => c.from?.id === PAGE_ID);
-    let count = 0;
+    const added = [];
 
-    for (const comment of filtered) {
-      const parsed = extractProductInfo(comment.message);
-      if (parsed) {
-        await db.collection('live_products').doc(parsed.selling_id).set({
-          ...parsed,
-          post_id,
-          created_at: Timestamp.now(),
-        });
-        count++;
-      }
+    for (const comment of comments) {
+      const message = comment.message;
+      const selling_id = normalizeSellingId(message);
+      const priceData = extractPrice(message);
+      if (!selling_id || !priceData) continue;
+
+      const docRef = productsRef.doc(selling_id);
+      await docRef.set({
+        selling_id,
+        category: selling_id.startsWith('A') ? 'A' : 'B',
+        product_name: message,
+        price: priceData.price,
+        price_raw: priceData.price_raw,
+        post_id,
+        created_at: new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' })
+      });
+
+      added.push(selling_id);
     }
 
-    res.status(200).json({
-      success: true,
-      message: `已清空旧留言并记录 ${count} 项商品`,
-      post_id,
-    });
+    return res.status(200).json({ success: true, message: `已清空旧留言并记录 ${added.length} 项商品`, post_id });
   } catch (err) {
-    console.error('[startOrderListener 错误]', err);
-    res.status(500).json({ error: '处理失败', detail: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
