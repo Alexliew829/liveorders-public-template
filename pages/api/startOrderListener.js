@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     // Step 1: 清空旧商品资料
     const oldProducts = await db.collection('live_products').get();
     const batch = db.batch();
-    oldProducts.forEach(doc => batch.delete(doc.ref));
+    oldProducts.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
 
     // Step 2: 获取最新贴文 ID
@@ -26,43 +26,44 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法获取贴文 ID', raw: postData });
     }
 
-    // Step 3: 获取留言
+    // Step 3: 获取该贴文下留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
 
-    let count = 0;
     const savedIds = new Set();
+    let count = 0;
 
     for (const comment of comments) {
       const msg = comment.message?.trim() || '';
-      const match = msg.match(/(A|B)\s*0*?(\d{1,3})[^\d]*?(.+?)RM[\s]*([\d,\.]+)/i);
+      const match = msg.match(/(A|B)\s*0*?(\d{1,3})[^\d]*?(.+?)(RM)?\s*([\d,\.]+)/i);
       if (!match) continue;
 
       const category = match[1].toUpperCase();
-      const number = match[2].padStart(3, '0'); // 标准化编号
+      const number = match[2].padStart(3, '0');
       const name = match[3].trim();
-      const rawPrice = parseFloat(match[4].replace(/,/g, ''));
-      if (isNaN(rawPrice)) continue;
+      const price_raw = parseFloat(match[5].replace(/,/g, ''));
+      if (isNaN(price_raw)) continue;
 
       const selling_id = `${category}${number}`;
-      if (savedIds.has(selling_id)) continue; // 避免重复
+      if (savedIds.has(selling_id)) continue;
       savedIds.add(selling_id);
 
       await db.collection('live_products').doc(selling_id).set({
         post_id,
         selling_id,
         product_name: `${selling_id} ${name}`,
-        price: rawPrice.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
-        price_raw: rawPrice,
+        price: price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+        price_raw,
         category,
         original_id: match[1] + match[2],
         created_at: new Date()
       });
+
       count++;
     }
 
-    res.status(200).json({ success: true, message: `✅ 已清空旧商品并记录 ${count} 项`, post_id });
+    res.status(200).json({ success: true, message: `✅ 已清空旧商品并写入 ${count} 项`, post_id });
   } catch (err) {
     console.error('[记录商品失败]', err);
     res.status(500).json({ error: '记录失败', detail: err.message });
