@@ -6,7 +6,6 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-
 const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
@@ -42,29 +41,28 @@ export default async function handler(req, res) {
     const comments = commentData?.data || [];
 
     let count = 0;
+
     for (const { message, from } of comments) {
       if (!message || !from || from.id === PAGE_ID) continue;
 
-      // ✅ 抓编号 A/B + 最多3位数字
-      const match = message.match(/\b([AB])[ \-_.～~]*0*(\d{1,3})\b/i);
+      // ✅ 编号格式匹配：B001、a22、A 88、b-7 等
+      const match = message.match(/\b([ABab])[ \-_.～~]*0*(\d{1,3})\b/);
       if (!match) continue;
       const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 抓价格（支持 rm 1111.11 / RM1111.11 / 1111.11）
-      const priceMatch = message.match(/(?:RM|rm|Rm|rM)?\s*([\d,]+\.\d{2})/);
+      // ✅ 价格匹配：支持 RM123.45 或 88.00
+      const priceMatch = message.match(/([RMrm]?\s?[\d,]+\.\d{2})/);
       if (!priceMatch) continue;
-
-      const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
+      const price_raw = parseFloat(priceMatch[1].replace(/[^\d.]/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 清除编号与价格，提取商品名
-      const noPrice = message.replace(/(?:RM|rm|Rm|rM)?\s*[\d,]+\.\d{2}/g, '').trim();
-      const nameClean = noPrice.replace(/\b[AB][ \-_.～~]*0*\d{1,3}\b/i, '').trim();
-      const product_name = nameClean;
+      // ✅ 去除编号与价格，提取商品名
+      const afterId = message.replace(/\b[ABab][ \-_.～~]*0*\d{1,3}\b/, '').trim();
+      const afterPrice = afterId.replace(/([RMrm]?\s?[\d,]+\.\d{2})/, '').trim();
+      const product_name = afterPrice;
 
-      // ✅ 写入 Firestore
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
         type,
@@ -87,6 +85,7 @@ export default async function handler(req, res) {
       post_id,
       debug: isDebug,
     });
+
   } catch (err) {
     console.error('🔥 执行失败:', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
