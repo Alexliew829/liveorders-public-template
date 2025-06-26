@@ -2,7 +2,6 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
@@ -19,7 +18,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ Step 1：清空 live_products 与 triggered_comments
+    // ✅ 1. 自动清空旧数据
     const collections = ['live_products', 'triggered_comments'];
     for (const col of collections) {
       const snapshot = await db.collection(col).get();
@@ -28,7 +27,7 @@ export default async function handler(req, res) {
       await batch.commit();
     }
 
-    // ✅ Step 2：获取最新贴文 ID
+    // ✅ 2. 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -36,45 +35,41 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // ✅ Step 3：获取留言
+    // ✅ 3. 获取主页留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
 
     let count = 0;
-    for (const { message, from } of comments) {
-      if (!message || !from || from.id === PAGE_ID) continue; // ✅ 过滤主页留言
 
-      // ✅ 取出编号格式（A/B + 最多3位数字）
-      const match = message.match(/\b([AB])[ \-_.～~]*0*(\d{1,3})\b/i);
+    for (const comment of comments) {
+      const { message, id: comment_id, from } = comment;
+      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页自己留言
+
+      // ✅ 提取编号（A/B + 数字，最多3位）
+      const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
       if (!match) continue;
+
       const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 取得价格（支持 RM 或纯数字）
-      const priceMatch = message.match(/([RMrm]?\s?[\d,]+\.\d{2})/);
+      // ✅ 提取价格（格式如 RM1234.56 或 RM 1,234.56）
+      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
       if (!priceMatch) continue;
 
-      const price_raw = parseFloat(priceMatch[1].replace(/[^\d.]/g, ''));
+      const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 清除编号与价格，提取商品名
-      const noPrice = message.replace(/RM\s?[\d,]+\.\d{2}/i, '')
-                             .replace(/[\d,]+\.\d{2}$/, '')
-                             .trim();
-      const nameClean = noPrice.replace(/^[\s\S]*?\b[AB][ \-_.～~]*0*\d{1,3}\b/i, '').trim();
-      const product_name = nameClean;
-
-      // ✅ 写入 Firestore
+      // ✅ 写入 Firestore（live_products）
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
         type,
         number,
-        product_name,
+        product_name: message.replace(/\s*RM[\d,]+\.\d{2}$/i, '').trim(),
         raw_message: message,
         price_raw,
-        price,
+        price, // formatted
         created_at: new Date().toISOString(),
         post_id,
       });
@@ -87,10 +82,10 @@ export default async function handler(req, res) {
       success: count,
       skipped: comments.length - count,
       post_id,
-      debug: isDebug,
     });
+
   } catch (err) {
-    console.error('🔥 执行失败:', err);
+    console.error('错误：', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
