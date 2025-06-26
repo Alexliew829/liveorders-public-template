@@ -4,39 +4,66 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>订单系统</title>
+
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="订单系统">
   <style>
     body {
+      font-family: sans-serif;
       background-color: #f7f7f7;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       text-align: center;
-      padding: 60px 20px;
+      padding-top: 60px;
     }
-    button {
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .action-button {
+      padding: 18px 32px;
       font-size: 20px;
-      margin: 14px auto;
-      padding: 20px 40px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
       border: none;
       border-radius: 12px;
-      color: #fff;
-      background-color: #27ae60;
-      box-shadow: 2px 4px 10px rgba(0,0,0,0.1);
-      width: 80%;
-      max-width: 400px;
-      display: block;
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
-    button:hover {
-      background-color: #219150;
+    .action-button:hover {
+      background-color: #1a6f1a;
     }
   </style>
 </head>
 <body>
-  <button onclick="location.href='/api/startOrderListener'">🪴 记录商品资料</button>
-  <button onclick="location.href='/api/sendPaymentLink'">📤 自动发送付款连接</button>
-  <button onclick="location.href='/api/pendingOrders'">🧾 显示待发订单</button>
-  <button onclick="location.href='/api/exportOrders'">📥 导出订单 Excel</button>
-  <button onclick="location.href='/api/debugProducts'">🧪 测试记录商品<br>(Debug)</button>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
+
+  <div class="button-container">
+    <button class="action-button" onclick="call('/api/startOrderListener')">🪴 记录商品资料</button>
+    <button class="action-button" onclick="call('/api/clearOldOrders')">🧹 清空顾客订单</button>
+    <button class="action-button" onclick="call('/api/sendPaymentLink')">📬 自动发送付款连接</button>
+    <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
+    <button class="action-button" onclick="call('/api/startOrderListener?debug')">🧪 测试记录商品（Debug）</button>
+  </div>
+
+  <script>
+    async function call(api) {
+      try {
+        const res = await fetch(api);
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('错误: ' + err.message);
+      }
+    }
+  </script>
 </body>
 </html>
