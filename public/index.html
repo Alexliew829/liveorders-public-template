@@ -4,207 +4,39 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>订单系统</title>
-
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Payment">
-
+  <meta name="apple-mobile-web-app-title" content="订单系统">
   <style>
     body {
-      font-family: sans-serif;
       background-color: #f7f7f7;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       text-align: center;
-      padding-top: 60px;
+      padding: 60px 20px;
     }
-    .icon {
-      width: 120px;
-      margin-bottom: 40px;
-    }
-    .button-container {
-      display: flex;
-      flex-direction: column;
-      gap: 30px;
-      align-items: center;
-    }
-    .action-button {
-      padding: 18px 32px;
+    button {
       font-size: 20px;
-      background-color: #228B22;
-      color: white;
-      font-weight: bold;
+      margin: 14px auto;
+      padding: 20px 40px;
       border: none;
       border-radius: 12px;
-      cursor: pointer;
-      width: 280px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      color: #fff;
+      background-color: #27ae60;
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.1);
+      width: 80%;
+      max-width: 400px;
+      display: block;
     }
-    .action-button:hover {
-      background-color: #1a6f1a;
-    }
-    #orderSection {
-      margin-top: 50px;
-      padding: 0 20px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 30px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 12px;
-      text-align: center;
-    }
-    th {
-      background-color: #eee;
-    }
-    .small-btn {
-      padding: 6px 12px;
-      font-size: 14px;
-      background-color: #228B22;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .small-btn:hover {
-      background-color: #1a6f1a;
+    button:hover {
+      background-color: #219150;
     }
   </style>
 </head>
 <body>
-  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
-
-  <div class="button-container">
-    <button class="action-button" onclick="startOrderListener()">🪴 记录商品资料</button>
-    <button class="action-button" onclick="confirmAllOrders()">✅ 写入所有订单</button>
-    <button class="action-button" onclick="autoSendPaymentLinks()">📬 自动发送付款连接</button>
-    <button class="action-button" onclick="loadOrders()">📋 显示待发订单</button>
-    <button class="action-button" onclick="exportOrders()">📤 导出订单 Excel</button>
-    <button class="action-button" onclick="debugStartOrderListener()">🧪 测试记录商品（Debug）</button>
-  </div>
-
-  <div id="orderSection">
-    <table id="orderTable" style="display:none">
-      <thead>
-        <tr>
-          <th>编号</th>
-          <th>商品名</th>
-          <th>顾客</th>
-          <th>金额</th>
-          <th>动作</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <script>
-    async function startOrderListener() {
-      try {
-        const res = await fetch(`api/startOrderListener`, { method: 'POST' });
-        const data = await res.json();
-        alert('记录商品完成：' + JSON.stringify(data));
-      } catch (err) {
-        alert('记录商品失败：' + err.message);
-      }
-    }
-
-    async function confirmAllOrders() {
-      try {
-        const res = await fetch(`api/confirmAllOrders`, { method: 'POST' });
-        const data = await res.json();
-        alert('订单写入完成：' + JSON.stringify(data));
-      } catch (err) {
-        alert('订单写入失败：' + err.message);
-      }
-    }
-
-    async function autoSendPaymentLinks() {
-      try {
-        const res = await fetch(`api/sendPaymentLink`, { method: 'POST' });
-        const data = await res.json();
-        alert('自动发送完成：' + JSON.stringify(data));
-      } catch (err) {
-        alert('自动发送失败：' + err.message);
-      }
-    }
-
-    async function loadOrders() {
-      const res = await fetch('api/pendingOrders');
-      const data = await res.json();
-      const tbody = document.querySelector('#orderTable tbody');
-      const table = document.getElementById('orderTable');
-      table.style.display = 'table';
-      tbody.innerHTML = '';
-
-      if (!data.orders || data.orders.length === 0) {
-        const row = document.createElement('tr');
-        row.innerHTML = '<td colspan="5">目前没有待发订单</td>';
-        tbody.appendChild(row);
-        return;
-      }
-
-      data.orders.forEach(order => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${order.selling_id}</td>
-          <td>${order.product_name}</td>
-          <td>${order.user_name || '匿名用户'}</td>
-          <td>RM ${order.price_fmt}</td>
-          <td>
-            <button class="small-btn" onclick="sendPayment('${order.comment_id}', this)">发送连接</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    async function sendPayment(commentId, btn) {
-      btn.disabled = true;
-      btn.innerText = '发送中...';
-
-      try {
-        const res = await fetch(`api/manualSend?comment_id=${commentId}`);
-        const data = await res.json();
-        if (data.success) {
-          btn.innerText = '✅ 已发送';
-        } else {
-          btn.innerText = '❌ 失败';
-          alert('发送失败: ' + (data.message || JSON.stringify(data)));
-        }
-      } catch (err) {
-        btn.innerText = '❌ 异常';
-        alert('错误: ' + err.message);
-      }
-    }
-
-    async function exportOrders() {
-      try {
-        const res = await fetch('api/exportOrders');
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = '已付款订单.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (err) {
-        alert('导出失败: ' + err.message);
-      }
-    }
-
-    async function debugStartOrderListener() {
-      try {
-        const res = await fetch(`api/startOrderListener?debug`);
-        const data = await res.json();
-        alert('Debug 模式：' + JSON.stringify(data));
-      } catch (err) {
-        alert('测试失败：' + err.message);
-      }
-    }
-  </script>
+  <button onclick="location.href='/api/startOrderListener'">🪴 记录商品资料</button>
+  <button onclick="location.href='/api/sendPaymentLink'">📤 自动发送付款连接</button>
+  <button onclick="location.href='/api/pendingOrders'">🧾 显示待发订单</button>
+  <button onclick="location.href='/api/exportOrders'">📥 导出订单 Excel</button>
+  <button onclick="location.href='/api/debugProducts'">🧪 测试记录商品<br>(Debug)</button>
 </body>
 </html>
