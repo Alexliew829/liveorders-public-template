@@ -61,12 +61,18 @@ export default async function handler(req, res) {
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
+      // ✅ 提取商品名称（排除编号与价格）
+      let product_name = message
+        .replace(/\b[AB][ \-_.～]*0*\d{1,3}\b/i, '')
+        .replace(/(?:RM|rm)?[^\d]*[\d,]+\.\d{2}\s*$/i, '')
+        .trim();
+
       // ✅ 写入 Firestore（live_products）
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
         type,
         number,
-        product_name: message.replace(/\s*RM[\d,]+\.\d{2}$/i, '').trim(),
+        product_name,
         raw_message: message,
         price_raw,
         price, // formatted
