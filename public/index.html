@@ -46,21 +46,24 @@
   <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
-    <button class="action-button" onclick="call('/api/startOrderListener')">🪴 记录商品资料</button>
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
     <button class="action-button" onclick="call('/api/sendPaymentLink')">📬 自动发送付款连接</button>
     <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
-    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
-    <button class="action-button" onclick="call('/api/startOrderListener?debug=1')">🧪 测试记录商品（Debug）</button>
+    <button class="action-button" onclick="call('/api/exportOrders', true)">📤 导出订单 Excel</button>
+    <button class="action-button" onclick="call('/api/startOrderListener?debug=1', true)">🧪 测试记录商品（Debug）</button>
   </div>
 
   <script>
-    async function call(api) {
+    async function call(api, isPost = false) {
       try {
-        const res = await fetch(api);
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
         const data = await res.json();
         alert(data.message || JSON.stringify(data));
       } catch (err) {
-        alert('错误: ' + err.message);
+        alert('❌ 错误：' + (err.message || '无法连接服务器'));
       }
     }
   </script>
