@@ -52,15 +52,15 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 价格匹配：支持 RM123.45 或 88.00
-      const priceMatch = message.match(/([RMrm]?\s?[\d,]+\.\d{2})/);
+      // ✅ 新版价格匹配：支持 RM、rm、空格、无空格
+      const priceMatch = message.match(/(?:RM|rm)?\s?([\d,.]+\.\d{2})/);
       if (!priceMatch) continue;
-      const price_raw = parseFloat(priceMatch[1].replace(/[^\d.]/g, ''));
+      const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
       // ✅ 去除编号与价格，提取商品名
       const afterId = message.replace(/\b[ABab][ \-_.～~]*0*\d{1,3}\b/, '').trim();
-      const afterPrice = afterId.replace(/([RMrm]?\s?[\d,]+\.\d{2})/, '').trim();
+      const afterPrice = afterId.replace(/(?:RM|rm)?\s?[\d,.]+\.\d{2}/, '').trim();
       const product_name = afterPrice;
 
       await db.collection('live_products').doc(selling_id).set({
