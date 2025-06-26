@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     }
 
     // ✅ Step 2：获取最新贴文 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+    const postRes = await fetch(https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
     if (!post_id) {
@@ -37,38 +37,33 @@ export default async function handler(req, res) {
     }
 
     // ✅ Step 3：获取留言
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
+    const commentRes = await fetch(https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
 
     let count = 0;
-
     for (const { message, from } of comments) {
-      if (!message || !from || from.id === PAGE_ID) continue;
+      if (!message || !from || from.id === PAGE_ID) continue; // ✅ 过滤主页留言
 
-      // ✅ 匹配编号：A/B + 最多3位数字
+      // ✅ 取出编号格式（A/B + 最多3位数字）
       const match = message.match(/\b([AB])[ \-_.～~]*0*(\d{1,3})\b/i);
       if (!match) continue;
       const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
-      const selling_id = `${type}${number}`;
+      const selling_id = ${type}${number};
 
-      // ✅ 匹配价格（支持 RM / rm / 数字）
+      // ✅ 取得价格（支持 RM 或纯数字）
       const priceMatch = message.match(/([RMrm]?\s?[\d,]+\.\d{2})/);
       if (!priceMatch) continue;
+
       const price_raw = parseFloat(priceMatch[1].replace(/[^\d.]/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 提取商品名（去掉编号和价格）
-      const msgWithoutPrice = message
-        .replace(/([RMrm]?\s?[\d,]+\.\d{2})/, '')       // 去价格
-        .replace(/\d+\.\d{2}$/, '')                    // 去尾部价格（无 RM 情况）
-        .trim();
-
-      const nameClean = msgWithoutPrice
-        .replace(/^[\s\S]*?\b[AB][ \-_.～~]*0*\d{1,3}\b/i, '') // 去编号
-        .trim();
-
+      // ✅ 清除编号与价格，提取商品名
+      const noPrice = message.replace(/RM\s?[\d,]+\.\d{2}/i, '')
+                             .replace(/[\d,]+\.\d{2}$/, '')
+                             .trim();
+      const nameClean = noPrice.replace(/^[\s\S]*?\b[AB][ \-_.～~]*0*\d{1,3}\b/i, '').trim();
       const product_name = nameClean;
 
       // ✅ 写入 Firestore
