@@ -54,8 +54,8 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 提取价格（格式如 RM1234.56 或 RM 1,234.56）
-      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
+      // ✅ 提取价格（格式如 RM1234.56、rm 1234.56、1234.56）
+      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.?\d{2})/i);
       if (!priceMatch) continue;
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
@@ -66,10 +66,10 @@ export default async function handler(req, res) {
         selling_id,
         type,
         number,
-        product_name: message.replace(/\s*RM[\d,]+\.\d{2}$/i, '').trim(),
+        product_name: message.replace(/\s*RM[\d,]+\.?\d{2}$/i, '').trim(),
         raw_message: message,
         price_raw,
-        price, // formatted
+        price,
         created_at: new Date().toISOString(),
         post_id,
       });
