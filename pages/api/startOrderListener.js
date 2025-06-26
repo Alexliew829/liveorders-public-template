@@ -39,21 +39,20 @@ export default async function handler(req, res) {
       const message = c.message?.trim();
       if (!message) continue;
 
-      // 留言格式匹配
       const match = message.match(/^([ABab][\s\-]*0*(\d{1,3}))[^\u4e00-\u9fa5A-Za-z0-9]*[\s\-~_，。、]*([^\sRMrm\d]*).*?(RM|rm)?\s*([\d,]+\.\d{2})/);
       if (!match) continue;
 
       const raw_number = match[1];
       const number = match[2];
       const name = match[3];
-      const priceStr = match[5];
+      const priceStr = match[4];
 
       const type = raw_number[0].toUpperCase(); // A 或 B
       const selling_id = `${type}${number.padStart(3, '0')}`;
       const price_raw = parseFloat(priceStr.replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
       const product_name = `${selling_id} ${name.trim()}`;
+
       const docData = {
         selling_id,
         type,
@@ -70,11 +69,11 @@ export default async function handler(req, res) {
       count++;
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: `${debug ? '测试写入' : '成功写入'} ${count} 项商品资料（含清空 triggered_comments）`
     });
   } catch (err) {
-    console.error('错误：', err);
-    return res.status(500).json({ error: err.message });
+    console.error('写入失败:', err);
+    res.status(500).json({ error: err.message });
   }
 }
