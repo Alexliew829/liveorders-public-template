@@ -1,4 +1,3 @@
-// ✅ 完整修复版：pages/api/startOrderListener.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -56,12 +55,11 @@ export default async function handler(req, res) {
       const price_raw = parseFloat(priceMatch[1].replace(/[^\d.]/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 去除编号和价格后提取商品名
-      let nameClean = message
-        .replace(/[RMrm]?[ \u00A0]?\d{1,3}(,\d{3})*(\.\d{2})/, '') // 去除价格
-        .replace(/[AB][ \-_.～~]*0*\d{1,3}/i, '') // 去除编号
-        .replace(/rm|RM/g, '')
-        .trim();
+      // ✅ 去除编号和价格后提取商品名（精准）
+      let nameClean = message;
+      nameClean = nameClean.replace(match[0], '');        // 去除编号
+      nameClean = nameClean.replace(priceMatch[0], '');   // 去除价格
+      nameClean = nameClean.trim();                       // 去除空格
 
       // ✅ 写入 Firestore
       await db.collection('live_products').doc(selling_id).set({
