@@ -1,68 +1,96 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>订单系统</title>
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="订单系统">
-  <style>
-    body {
-      font-family: sans-serif;
-      background-color: #f7f7f7;
-      text-align: center;
-      padding-top: 60px;
-    }
-    .icon {
-      width: 120px;
-      margin-bottom: 40px;
-    }
-    .button-container {
-      display: flex;
-      flex-direction: column;
-      gap: 30px;
-      align-items: center;
-    }
-    .action-button {
-      padding: 18px 32px;
-      font-size: 20px;
-      background-color: #228B22;
-      color: white;
-      font-weight: bold;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      width: 280px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    .action-button:hover {
-      background-color: #1a6f1a;
-    }
-  </style>
-</head>
-<body>
-  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
+const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+if (!getApps().length) {
+  initializeApp({ credential: cert(serviceAccount) });
+}
+const db = getFirestore();
 
-  <div class="button-container">
-    <button class="action-button" onclick="call('/api/startOrderListener')">🪴 记录商品资料</button>
-    <button class="action-button" onclick="call('/api/sendPaymentLink')">📬 自动发送付款连接</button>
-    <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
-    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
-    <button class="action-button" onclick="call('/api/startOrderListener?debug=1')">🧪 测试记录商品（Debug）</button>
-  </div>
+const PAGE_ID = process.env.PAGE_ID;
+const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
-  <script>
-    async function call(api) {
-      try {
-        const res = await fetch(api);
-        const data = await res.json();
-        alert(data.message || JSON.stringify(data));
-      } catch (err) {
-        alert('错误: ' + err.message);
-      }
+export default async function handler(req, res) {
+  const isDebug = req.query.debug !== undefined;
+
+  if (req.method !== 'POST' && !isDebug) {
+    return res.status(405).json({ error: '只允许 POST 请求' });
+  }
+
+  try {
+    // ✅ 清空旧数据
+    const collections = ['live_products', 'triggered_comments'];
+    for (const col of collections) {
+      const snapshot = await db.collection(col).get();
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
     }
-  </script>
-</body>
-</html>
+
+    // ✅ 获取最新贴文 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+    const postData = await postRes.json();
+    const post_id = postData?.data?.[0]?.id;
+    if (!post_id) {
+      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+    }
+
+    // ✅ 获取留言
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
+    const commentData = await commentRes.json();
+    const comments = commentData?.data || [];
+
+    let count = 0;
+
+    for (const comment of comments) {
+      const { message, from } = comment;
+      if (!message || !from || from.id !== PAGE_ID) continue;
+
+      // ✅ 识别编号
+      const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
+      if (!match) continue;
+      const type = match[1].toUpperCase();
+      const number = match[2].padStart(3, '0');
+      const selling_id = `${type}${number}`;
+
+      // ✅ 识别价格（RM 可省略）
+      const priceMatch = message.match(/(?:RM|rm)?[^0-9]*([\d,]+\.\d{2})$/i);
+      if (!priceMatch) continue;
+      const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
+      const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
+
+      // ✅ 正确提取 product_name（编号+名称，去掉价格）
+      const product_name = `${selling_id} ${message
+        .replace(/^.*?\b[AB][\s\-_.～]*0*\d{1,3}\b/i, '')
+        .replace(/\s*(RM|rm)?[\s\-]*[\d,]+\.\d{2}$/i, '')
+        .trim()}`;
+
+      // ✅ 写入 Firestore
+      await db.collection('live_products').doc(selling_id).set({
+        selling_id,
+        type,
+        number,
+        product_name,
+        raw_message: message,
+        price_raw,
+        price,
+        created_at: new Date().toISOString(),
+        post_id,
+      });
+
+      count++;
+    }
+
+    return res.status(200).json({
+      message: '商品写入完成',
+      success: count,
+      skipped: comments.length - count,
+      post_id,
+      debug: isDebug,
+    });
+
+  } catch (err) {
+    console.error('🔥 执行失败:', err);
+    return res.status(500).json({ error: '执行失败', details: err.message });
+  }
+}
