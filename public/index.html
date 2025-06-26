@@ -1,78 +1,68 @@
-// pages/api/startOrderListener.js
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>订单系统</title>
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-
-const db = getFirestore();
-const PAGE_ID = process.env.PAGE_ID;
-const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
-
-export default async function handler(req, res) {
-  const debug = req.query.debug === '1';
-
-  try {
-    // 获取最新贴文 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
-    if (!post_id) throw new Error('无法获取贴文 ID');
-
-    // 清空 live_products 和 triggered_comments
-    const liveProductsSnap = await db.collection('live_products').get();
-    const batch = db.batch();
-    liveProductsSnap.docs.forEach(doc => batch.delete(doc.ref));
-
-    const commentsSnap = await db.collection('triggered_comments').get();
-    commentsSnap.docs.forEach(doc => batch.delete(doc.ref));
-
-    await batch.commit();
-
-    // 获取留言
-    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=1000`);
-    const commentData = await commentRes.json();
-    const comments = commentData?.data || [];
-
-    let count = 0;
-    for (const comment of comments) {
-      const message = comment.message?.trim();
-      if (!message) continue;
-
-      // 判断留言是否是商品资料
-      const match = message.match(/^[ABab][\s-]*0*(\d{1,3})[\s\-]*([\u4e00-\u9fa5a-zA-Z0-9\s\-]*)\s+(RM|rm|Rm)[\s]*([\d,]+\.\d{2})/);
-      if (!match) continue;
-
-      const [raw, number, name, , priceStr] = match;
-      const type = message[0].toUpperCase();
-      const selling_id = `${type}${number.padStart(3, '0')}`;
-
-      const price_raw = parseFloat(priceStr.replace(/,/g, ''));
-      const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
-      const product_name = `${selling_id} ${name.trim()}`;
-
-      await db.collection('live_products').doc(selling_id).set({
-        selling_id,
-        type,
-        number: number.padStart(3, '0'),
-        product_name,
-        raw_message: message,
-        price_raw,
-        price,
-        created_at: new Date().toISOString(),
-        post_id,
-      });
-
-      count++;
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="订单系统">
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      padding-top: 60px;
     }
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .action-button {
+      padding: 18px 32px;
+      font-size: 20px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+  </style>
+</head>
+<body>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
-    res.status(200).json({ message: debug ? `测试写入 ${count} 项商品资料（含清空 triggered_comments）` : `成功写入 ${count} 项商品资料` });
-  } catch (err) {
-    console.error('错误：', err);
-    res.status(500).json({ error: err.message });
-  }
-}
+  <div class="button-container">
+    <button class="action-button" onclick="call('/api/startOrderListener')">🪴 记录商品资料</button>
+    <button class="action-button" onclick="call('/api/sendPaymentLink')">📬 自动发送付款连接</button>
+    <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
+    <button class="action-button" onclick="call('/api/startOrderListener?debug=1')">🧪 测试记录商品（Debug）</button>
+  </div>
+
+  <script>
+    async function call(api) {
+      try {
+        const res = await fetch(api);
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('错误: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
