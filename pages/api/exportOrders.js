@@ -4,11 +4,9 @@ import { writeToBuffer } from 'xlsx';
 import * as XLSX from 'xlsx';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-
 const db = getFirestore();
 
 export default async function handler(req, res) {
@@ -20,18 +18,21 @@ export default async function handler(req, res) {
       .limit(1000)
       .get();
 
+    if (snapshot.empty) {
+      return res.status(404).json({ error: '没有找到任何已发送订单' });
+    }
+
     const rows = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
-        商品编号: data.selling_id,
-        商品名称: data.product_name || '',
-        类别: data.category || '',
         顾客姓名: data.user_name || '匿名',
         顾客FacebookID: data.user_id || '',
-        付款金额: data.price_raw || 0, // 数字格式，方便加总
-        格式化金额: data.price_fmt || '',
-        留言时间: data.created_at?.toDate?.().toLocaleString() || '',
-        发送时间: data.sent_at?.toDate?.().toLocaleString() || '',
+        商品编号: data.selling_id || '',
+        商品名称: data.product_name || '',
+        类别: data.category || '',
+        付款金额: data.price_raw ? parseFloat(data.price_raw).toFixed(2) : '0.00',
+        留言时间: data.created_at?.toDate?.().toISOString() || '',
+        发送时间: data.sent_at?.toDate?.().toISOString() || '',
         付款连接: data.payment_url || ''
       };
     });
