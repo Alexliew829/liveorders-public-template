@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     }
 
     // ✅ Step 2：获取最新贴文 ID
-    const postRes = await fetch(https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1);
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
     if (!post_id) {
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     }
 
     // ✅ Step 3：获取留言
-    const commentRes = await fetch(https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100);
+    const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
 
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       if (!match) continue;
       const type = match[1].toUpperCase();
       const number = match[2].padStart(3, '0');
-      const selling_id = ${type}${number};
+      const selling_id = `${type}${number}`;
 
       // ✅ 取得价格（支持 RM 或纯数字）
       const priceMatch = message.match(/([RMrm]?\s?[\d,]+\.\d{2})/);
