@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
     for (const comment of comments) {
       const { message, id: comment_id, from } = comment;
-      if (!message || !from || from.id !== PAGE_ID) continue; // 跳过访客留言
+      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页自己留言
 
       // ✅ 提取编号（A/B + 数字）
       const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
@@ -54,19 +54,24 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 提取价格（格式如 RM1234.56、rm 1,234.56、5555.55）
+      // ✅ 提取价格（支持格式：RM1234.56、rm 1,234.56、5555.55）
       const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
       if (!priceMatch) continue;
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 提取商品名称（去编号、去价格，最多9个字）
-      let name = message
-        .replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '') // 去除开头编号
-        .replace(/\s*(?:RM|rm)?[^\d]*[\d,]+\.\d{2}\s*$/i, '') // 去除尾部价格
-        .trim();
-      name = name.slice(0, 9); // 限制最多9个字
+      // ✅ 提取商品名称（去编号 + 去价格 + 最多9字）
+      let name = message;
+
+      // 去掉前缀编号（如 A101、B 333 等）
+      name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
+
+      // 去掉尾部价格（无论是否有 RM 前缀）
+      name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}\s*$/i, '');
+
+      // 去掉前后空格，再限制9个字
+      name = name.trim().slice(0, 9);
 
       // ✅ 写入 Firestore
       await db.collection('live_products').doc(selling_id).set({
