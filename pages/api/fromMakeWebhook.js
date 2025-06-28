@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     }
 
     const prefix = match[0][0].toUpperCase(); // A or B
-    const number = match[1].padStart(3, '0');
+    const number = match[1].padStart(3, '0'); // 补足为 3 位数
     const selling_id = `${prefix}${number}`;
 
     const productSnap = await db.collection('live_products').doc(selling_id).get();
@@ -51,19 +51,18 @@ export default async function handler(req, res) {
     };
 
     const docRef = db.collection('triggered_comments').doc(selling_id);
+    const docSnap = await docRef.get();
 
-    if (prefix === 'A') {
-      // A 类也用 selling_id 作为唯一 ID，但允许覆盖（最后留言覆盖）
-      await docRef.set(payload); // ❗️此行为为“最后留言者覆盖前者”
-      return res.status(200).json({ message: 'A类已写入（覆盖）', docId: selling_id });
-    } else {
-      // B 类只允许一次
-      const bSnap = await docRef.get();
-      if (bSnap.exists) {
-        return res.status(200).json({ message: `编号 ${selling_id} 已有人留言（B类限一人）` });
+    if (prefix === 'B') {
+      if (docSnap.exists) {
+        return res.status(200).json({ message: `B类编号 ${selling_id} 已有人留言，不可重复` });
+      } else {
+        await docRef.set(payload);
+        return res.status(200).json({ message: 'B类留言已写入', docId: selling_id });
       }
-      await docRef.set(payload);
-      return res.status(200).json({ message: 'B类已写入', docId: selling_id });
+    } else {
+      await docRef.set(payload); // ✅ A类每次覆盖（使用相同 Document ID）
+      return res.status(200).json({ message: 'A类留言已写入（覆盖模式）', docId: selling_id });
     }
   } catch (err) {
     return res.status(500).json({ error: '写入失败', details: err.message });
