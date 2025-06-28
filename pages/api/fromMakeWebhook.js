@@ -1,10 +1,11 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
+
 const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
@@ -14,70 +15,59 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { from, message, post_id, comment_id } = req.body;
+    const { post_id, comment_id, message, user_id, user_name } = req.body;
 
-    if (!message || !from || !post_id || !comment_id) {
+    if (!post_id || !comment_id || !message) {
       return res.status(400).json({ error: '缺少必要字段' });
     }
 
-    // 排除主页留言
-    if (from.id === PAGE_ID) {
-      return res.status(200).json({ skip: '主页留言略过' });
+    if (user_id === PAGE_ID) {
+      return res.status(200).json({ message: '已忽略主页留言' });
     }
 
-    const user_id = from.id;
-    const user_name = from.name || '';
-    const text = message;
-
-    // 提取编号（支持 A/B + 数字，支持空格或 0 开头）
-    const match = text.match(/\\b([ABab])\\s*0*([1-9][0-9]?)\\b/);
+    // 支持格式：A01、b1、A 88、B-099
+    const match = message.match(/[aAbB][\s\-]*0{0,2}(\d{1,3})/);
     if (!match) {
-      return res.status(200).json({ skip: '无有效商品编号' });
+      return res.status(200).json({ message: '无有效商品编号' });
     }
 
-    const type = match[1].toUpperCase(); // A or B
-    const number = match[2].padStart(3, '0'); // 如 001、099
-    const selling_id = `${type}${number}`;
+    const prefix = match[0][0].toUpperCase(); // A or B
+    const number = match[1].padStart(3, '0'); // 格式化为三位数
+    const selling_id = `${prefix}${number}`;
 
     // 查询商品资料
     const productSnap = await db.collection('live_products').doc(selling_id).get();
-    if (!productSnap.exists) {
-      return res.status(200).json({ skip: '商品不存在' });
-    }
-
-    const { product_name, price } = productSnap.data();
+    const product = productSnap.exists ? productSnap.data() : {};
 
     const payload = {
-      selling_id,
-      product_name,
-      price,
-      message: text,
-      user_id,
-      user_name,
       post_id,
       comment_id,
+      message,
+      user_id,
+      user_name: user_name || '',
       created_at: Date.now(),
       replied: false,
+      selling_id,
+      product_name: product.product_name || '',
+      price: product.price || '',
     };
 
-    if (type === 'A') {
-      // 多人下单，使用唯一 ID
-      const uniqueId = `${selling_id}_${Date.now()}`;
-      await db.collection('triggered_comments').doc(uniqueId).set(payload);
-      return res.status(200).json({ status: '写入 A 类成功', doc_id: uniqueId });
+    if (prefix === 'A') {
+      // A类允许重复，使用 selling_id + 时间戳作为 Document ID
+      const docId = `${selling_id}_${Date.now()}`;
+      await db.collection('triggered_comments').doc(docId).set(payload);
+      return res.status(200).json({ message: 'A类已写入', docId });
     } else {
-      // 只允许第一人下单
-      const bDoc = db.collection('triggered_comments').doc(selling_id);
-      const bExists = await bDoc.get();
-      if (bExists.exists) {
-        return res.status(200).json({ skip: 'B 类已有留言' });
+      // B类只写入一次
+      const bRef = db.collection('triggered_comments').doc(selling_id);
+      const bSnap = await bRef.get();
+      if (bSnap.exists) {
+        return res.status(200).json({ message: `编号 ${selling_id} 已有人留言（B类限一人）` });
       }
-      await bDoc.set(payload);
-      return res.status(200).json({ status: '写入 B 类成功', doc_id: selling_id });
+      await bRef.set(payload);
+      return res.status(200).json({ message: 'B类已写入', docId: selling_id });
     }
-
   } catch (err) {
-    console.error('处理失败:', err);
     return res.status(500).json({ error: '写入失败', details: err.message });
   }
 }
