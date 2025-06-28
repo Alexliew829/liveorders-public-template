@@ -15,12 +15,14 @@ export default async function handler(req, res) {
   try {
     const { post_id, comment_id, message, user_id, user_name } = req.body;
 
-    if (!message || !comment_id || !user_id) {
-      return res.status(400).json({ error: '缺少必要字段' });
+    console.log('📥 Webhook 收到留言内容：', JSON.stringify(req.body, null, 2));
+
+    if (!message || !comment_id) {
+      return res.status(400).json({ error: '缺少 comment_id 或 message' });
     }
 
     // 排除主页自己的留言
-    if (user_id === PAGE_ID) {
+    if (user_id && user_id === PAGE_ID) {
       return res.status(200).json({ status: 'ignored', reason: '主页留言' });
     }
 
@@ -54,8 +56,8 @@ export default async function handler(req, res) {
       comment_id,
       post_id: post_id || '',
       message,
-      user_id,
-      user_name: user_name || '',
+      user_id: user_id || '',
+      user_name: user_name || '匿名用户',
       selling_id,
       product_name: product.name,
       price: product.price,
@@ -65,7 +67,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ status: 'success', selling_id });
   } catch (err) {
-    console.error('处理留言失败：', err);
+    console.error('❌ 处理留言失败：', err);
     return res.status(500).json({ error: '内部错误', details: err.message });
   }
 }
