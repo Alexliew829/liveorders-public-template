@@ -6,6 +6,7 @@ if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
 const db = getFirestore();
+
 const PAGE_ID = process.env.PAGE_ID;
 
 export default async function handler(req, res) {
@@ -14,62 +15,54 @@ export default async function handler(req, res) {
   }
 
   const { post_id, comment_id, message, user_id, user_name } = req.body;
-
-  if (!post_id || !comment_id || !message) {
-    return res.status(400).json({ error: '缺少必要字段', body: req.body });
+  if (!message || !comment_id || !post_id) {
+    return res.status(400).json({ error: '缺少必要字段' });
   }
 
-  // 忽略主页自己留言
-  if (user_id === PAGE_ID) {
-    return res.status(200).json({ status: '跳过主页留言' });
-  }
-
-  // 提取编号（如 B001 / A32 等）
-  const match = message.match(/\b([AB])[\s\-]?0*(\d{1,3})\b/i);
-  if (!match) {
-    return res.status(200).json({ status: '无有效编号，跳过' });
-  }
-
-  const type = match[1].toUpperCase();  // A 或 B
-  const number = match[2].padStart(3, '0'); // 001, 032
-  const selling_id = `${type}${number}`;
-
-  // 查询商品资料
-  const productRef = db.collection('live_products').doc(selling_id);
-  const productSnap = await productRef.get();
-  if (!productSnap.exists) {
-    return res.status(404).json({ error: `找不到商品 ${selling_id}` });
-  }
-  const product = productSnap.data();
-
-  const commentRef = db.collection('triggered_comments').doc(comment_id);
-
-  if (type === 'B') {
-    // 只允许第一个留言者写入
-    const existing = await db.collection('triggered_comments')
-      .where('selling_id', '==', selling_id)
-      .limit(1)
-      .get();
-
-    if (!existing.empty) {
-      return res.status(200).json({ status: `B类商品 ${selling_id} 已被留言，不重复写入` });
+  try {
+    // 提取编号（如 A23、b 001、B88）
+    const match = message.match(/\b([ABab])[\s\-_]*0*([1-9][0-9]?)\b/);
+    if (!match) {
+      return res.status(400).json({ error: '无效留言格式' });
     }
+
+    const type = match[1].toUpperCase(); // A 或 B
+    const number = match[2];
+    const selling_id = `${type}${number.padStart(3, '0')}`;
+
+    const commentRef = db.collection('triggered_comments');
+    const query = commentRef.where('selling_id', '==', selling_id);
+
+    if (type === 'B') {
+      const existing = await query.limit(1).get();
+      if (!existing.empty) {
+        return res.status(200).json({ message: 'B类商品已有顾客' });
+      }
+    } else {
+      const duplicate = await commentRef
+        .where('selling_id', '==', selling_id)
+        .where('user_id', '==', user_id)
+        .limit(1)
+        .get();
+      if (!duplicate.empty) {
+        return res.status(200).json({ message: 'A类商品该顾客已下单' });
+      }
+    }
+
+    await commentRef.add({
+      post_id,
+      comment_id,
+      message,
+      user_id,
+      user_name: user_name || '',
+      selling_id,
+      created_at: Date.now(),
+      replied: false,
+    });
+
+    return res.status(200).json({ success: true, selling_id });
+  } catch (err) {
+    console.error('写入失败', err);
+    return res.status(500).json({ error: '写入失败', details: err.message });
   }
-
-  // 写入 Firestore
-  await commentRef.set({
-    post_id,
-    comment_id,
-    message,
-    user_id,
-    user_name: user_name || '',
-    selling_id,
-    type,
-    created_at: new Date().toISOString(),
-    product_name: product.product_name,
-    price: product.price,
-    price_raw: product.price_raw,
-  });
-
-  return res.status(200).json({ status: `成功写入 ${selling_id}` });
 }
