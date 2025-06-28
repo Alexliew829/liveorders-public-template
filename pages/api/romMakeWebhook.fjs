@@ -9,7 +9,9 @@ const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: '只允许 POST' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: '只允许 POST' });
+  }
 
   try {
     const { post_id, comment_id, message, user_id, user_name } = req.body;
@@ -20,39 +22,41 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '缺少 comment_id 或 message' });
     }
 
-    // 排除主页自己的留言
+    // 🛑 排除主页自己留言
     if (user_id && user_id === PAGE_ID) {
       return res.status(200).json({ status: 'ignored', reason: '主页留言' });
     }
 
-    // ✅ 宽容提取编号（A 或 B + 1~3位数字），允许中间有空格、0填充、大小写混合
+    // ✅ 宽容匹配格式（A/B + 数字1~3位，支持空格、0填充）
     const match = message.match(/\b([ab])\s*0*([1-9][0-9]{0,2})\b/i);
     if (!match) {
       return res.status(200).json({ status: 'ignored', reason: '留言中没有有效编号' });
     }
-    const type = match[1].toUpperCase(); // A 或 B
-    const number = match[2];             // 去除前导0的编号
-    const selling_id = type + number;    // A32、B001 等标准格式
 
-    // 🔍 查找商品
+    const type = match[1].toUpperCase(); // A or B
+    const number = match[2]; // 去除前导0
+    const selling_id = `${type}${number}`; // 统一格式 A32 / B001
+
+    // 🔍 查询商品
     const productSnap = await db.collection('live_products').doc(selling_id).get();
     if (!productSnap.exists) {
       return res.status(200).json({ status: 'failed', reason: `找不到商品 ${selling_id}` });
     }
+
     const product = productSnap.data();
 
-    // ✅ B 类商品只写入第一位留言者
+    // 🔁 A 类商品允许重复留言写入
     if (product.type === 'B') {
       const existSnap = await db.collection('triggered_comments')
         .where('selling_id', '==', selling_id)
         .limit(1)
         .get();
       if (!existSnap.empty) {
-        return res.status(200).json({ status: 'skipped', reason: 'B类商品已有下单者' });
+        return res.status(200).json({ status: 'skipped', reason: 'B类商品已有留言者' });
       }
     }
 
-    // ✅ 写入 Firestore（跳过 undefined）
+    // ✅ 写入 triggered_comments
     await db.collection('triggered_comments').doc(comment_id).set({
       comment_id,
       post_id: post_id || '',
@@ -68,7 +72,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ status: 'success', selling_id });
   } catch (err) {
-    console.error('❌ 处理留言失败：', err);
+    console.error('❌ 写入失败：', err);
     return res.status(500).json({ error: '内部错误', details: err.message });
   }
 }
