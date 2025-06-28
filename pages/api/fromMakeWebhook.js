@@ -1,12 +1,13 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-const db = getFirestore();
 
+const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
 export default async function handler(req, res) {
@@ -14,55 +15,63 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
-  const { post_id, comment_id, message, user_id, user_name } = req.body;
-  if (!message || !comment_id || !post_id) {
-    return res.status(400).json({ error: '缺少必要字段' });
-  }
-
   try {
-    // 提取编号（如 A23、b 001、B88）
-    const match = message.match(/\b([ABab])[\s\-_]*0*([1-9][0-9]?)\b/);
+    const { post_id, comment_id, message, user_id, user_name } = req.body;
+
+    if (!post_id || !comment_id || !message) {
+      return res.status(400).json({ error: '缺少必要字段' });
+    }
+
+    // 过滤主页账号留言
+    if (user_id === PAGE_ID) {
+      return res.status(200).json({ message: '已忽略主页留言' });
+    }
+
+    // 提取编号（如 A01、B1 等）
+    const match = message.match(/[aAbB][\s\-]*0{0,2}(\d{1,3})/);
     if (!match) {
-      return res.status(400).json({ error: '无效留言格式' });
+      return res.status(200).json({ message: '无有效商品编号' });
     }
 
-    const type = match[1].toUpperCase(); // A 或 B
-    const number = match[2];
-    const selling_id = `${type}${number.padStart(3, '0')}`;
+    let prefix = match[0][0].toUpperCase(); // A or B
+    let number = match[1].padStart(2, '0'); // 补0
+    const selling_id = `${prefix}${number}`;
 
-    const commentRef = db.collection('triggered_comments');
-    const query = commentRef.where('selling_id', '==', selling_id);
+    // 查询是否已存在（B类只允许写入一次）
+    const docRef = db.collection('triggered_comments').doc(selling_id);
+    const docSnap = await docRef.get();
+    const allowMultiple = prefix === 'A';
 
-    if (type === 'B') {
-      const existing = await query.limit(1).get();
-      if (!existing.empty) {
-        return res.status(200).json({ message: 'B类商品已有顾客' });
-      }
-    } else {
-      const duplicate = await commentRef
-        .where('selling_id', '==', selling_id)
-        .where('user_id', '==', user_id)
-        .limit(1)
-        .get();
-      if (!duplicate.empty) {
-        return res.status(200).json({ message: 'A类商品该顾客已下单' });
-      }
+    if (docSnap.exists && !allowMultiple) {
+      return res.status(200).json({ message: `编号 ${selling_id} 已有留言者（B类限一人）` });
     }
 
-    await commentRef.add({
+    // 从 live_products 表中抓取商品信息
+    const productRef = db.collection('live_products').doc(selling_id);
+    const productSnap = await productRef.get();
+    const product = productSnap.exists ? productSnap.data() : {};
+
+    const payload = {
       post_id,
       comment_id,
       message,
-      user_id,
+      user_id: user_id || '',
       user_name: user_name || '',
-      selling_id,
       created_at: Date.now(),
       replied: false,
-    });
+      selling_id,
+      product_name: product.product_name || '',
+      price: product.price || '',
+    };
 
-    return res.status(200).json({ success: true, selling_id });
+    if (allowMultiple) {
+      await db.collection('triggered_comments').add(payload);
+    } else {
+      await docRef.set(payload); // Document ID = selling_id
+    }
+
+    return res.status(200).json({ message: '已写入', payload });
   } catch (err) {
-    console.error('写入失败', err);
     return res.status(500).json({ error: '写入失败', details: err.message });
   }
 }
