@@ -25,17 +25,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '已忽略主页留言' });
     }
 
-    // 支持格式：A01、b1、A 88、B-099
     const match = message.match(/[aAbB][\s\-]*0{0,2}(\d{1,3})/);
     if (!match) {
       return res.status(200).json({ message: '无有效商品编号' });
     }
 
     const prefix = match[0][0].toUpperCase(); // A or B
-    const number = match[1].padStart(3, '0'); // 格式化为三位数
+    const number = match[1].padStart(3, '0');
     const selling_id = `${prefix}${number}`;
 
-    // 查询商品资料
     const productSnap = await db.collection('live_products').doc(selling_id).get();
     const product = productSnap.exists ? productSnap.data() : {};
 
@@ -52,19 +50,19 @@ export default async function handler(req, res) {
       price: product.price || '',
     };
 
+    const docRef = db.collection('triggered_comments').doc(selling_id);
+
     if (prefix === 'A') {
-      // A类允许重复，使用 selling_id + 时间戳作为 Document ID
-      const docId = `${selling_id}_${Date.now()}`;
-      await db.collection('triggered_comments').doc(docId).set(payload);
-      return res.status(200).json({ message: 'A类已写入', docId });
+      // A 类也用 selling_id 作为唯一 ID，但允许覆盖（最后留言覆盖）
+      await docRef.set(payload); // ❗️此行为为“最后留言者覆盖前者”
+      return res.status(200).json({ message: 'A类已写入（覆盖）', docId: selling_id });
     } else {
-      // B类只写入一次
-      const bRef = db.collection('triggered_comments').doc(selling_id);
-      const bSnap = await bRef.get();
+      // B 类只允许一次
+      const bSnap = await docRef.get();
       if (bSnap.exists) {
         return res.status(200).json({ message: `编号 ${selling_id} 已有人留言（B类限一人）` });
       }
-      await bRef.set(payload);
+      await docRef.set(payload);
       return res.status(200).json({ message: 'B类已写入', docId: selling_id });
     }
   } catch (err) {
