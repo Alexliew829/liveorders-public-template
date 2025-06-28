@@ -6,7 +6,6 @@ if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
 const db = getFirestore();
-
 const PAGE_ID = process.env.PAGE_ID;
 
 export default async function handler(req, res) {
@@ -26,33 +25,34 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: 'ignored', reason: '主页留言' });
     }
 
-    // ✅ 支持 A / B 编号（如 A101、B222、a 01、b001）
-    const match = message.match(/([ab])\s*0*([1-9][0-9]{0,2})/i);
+    // ✅ 宽容提取编号（A 或 B + 1~3位数字），允许中间有空格、0填充、大小写混合
+    const match = message.match(/\b([ab])\s*0*([1-9][0-9]{0,2})\b/i);
     if (!match) {
-      return res.status(200).json({ status: 'ignored', reason: '留言中没有商品编号' });
+      return res.status(200).json({ status: 'ignored', reason: '留言中没有有效编号' });
     }
-    const prefix = match[1].toUpperCase(); // A 或 B
-    const selling_id = prefix + match[2];
+    const type = match[1].toUpperCase(); // A 或 B
+    const number = match[2];             // 去除前导0的编号
+    const selling_id = type + number;    // A32、B001 等标准格式
 
-    // 查找对应商品
+    // 🔍 查找商品
     const productSnap = await db.collection('live_products').doc(selling_id).get();
     if (!productSnap.exists) {
       return res.status(200).json({ status: 'failed', reason: `找不到商品 ${selling_id}` });
     }
     const product = productSnap.data();
 
-    // ✅ 若为 B 类商品，只允许第一位顾客
+    // ✅ B 类商品只写入第一位留言者
     if (product.type === 'B') {
       const existSnap = await db.collection('triggered_comments')
         .where('selling_id', '==', selling_id)
         .limit(1)
         .get();
       if (!existSnap.empty) {
-        return res.status(200).json({ status: 'skipped', reason: '已有下单者' });
+        return res.status(200).json({ status: 'skipped', reason: 'B类商品已有下单者' });
       }
     }
 
-    // ✅ 写入 Firestore
+    // ✅ 写入 Firestore（跳过 undefined）
     await db.collection('triggered_comments').doc(comment_id).set({
       comment_id,
       post_id: post_id || '',
@@ -60,9 +60,9 @@ export default async function handler(req, res) {
       user_id: user_id || '',
       user_name: user_name || '匿名用户',
       selling_id,
-      product_name: product.name,
-      price: product.price,
-      price_raw: product.price_raw,
+      product_name: product?.product_name || '',
+      price: product?.price || '',
+      price_raw: product?.price_raw || 0,
       created_at: new Date().toISOString(),
     });
 
