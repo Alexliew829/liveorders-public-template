@@ -10,15 +10,12 @@ const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: '只允许 POST' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: '只允许 POST' });
 
   try {
     const { post_id, comment_id, message, user_id, user_name } = req.body;
 
     console.log('📥 Webhook 收到留言内容：', JSON.stringify(req.body, null, 2));
-    console.log('📭 检查字段是否缺失：', { comment_id, message, user_id, user_name });
 
     if (!message || !comment_id) {
       return res.status(400).json({ error: '缺少 comment_id 或 message' });
@@ -29,15 +26,13 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: 'ignored', reason: '主页留言' });
     }
 
-    // 提取编号（支持 B01 / b01 / B 01 / B001 / b 001）
-    const match = message.match(/b\s*0*([1-9][0-9]{0,2})/i);
-    console.log('🔍 提取编号匹配结果：', match);
-
+    // ✅ 支持 A / B 编号（如 A101、B222、a 01、b001）
+    const match = message.match(/([ab])\s*0*([1-9][0-9]{0,2})/i);
     if (!match) {
-      return res.status(200).json({ status: 'ignored', reason: '留言中没有编号' });
+      return res.status(200).json({ status: 'ignored', reason: '留言中没有商品编号' });
     }
-
-    const selling_id = 'B' + match[1];
+    const prefix = match[1].toUpperCase(); // A 或 B
+    const selling_id = prefix + match[2];
 
     // 查找对应商品
     const productSnap = await db.collection('live_products').doc(selling_id).get();
@@ -46,7 +41,7 @@ export default async function handler(req, res) {
     }
     const product = productSnap.data();
 
-    // 若是 B 类商品，只允许第一人写入
+    // ✅ 若为 B 类商品，只允许第一位顾客
     if (product.type === 'B') {
       const existSnap = await db.collection('triggered_comments')
         .where('selling_id', '==', selling_id)
@@ -57,7 +52,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 写入 triggered_comments
+    // ✅ 写入 Firestore
     await db.collection('triggered_comments').doc(comment_id).set({
       comment_id,
       post_id: post_id || '',
@@ -71,7 +66,6 @@ export default async function handler(req, res) {
       created_at: new Date().toISOString(),
     });
 
-    console.log('✅ 写入成功：', comment_id);
     return res.status(200).json({ status: 'success', selling_id });
   } catch (err) {
     console.error('❌ 处理留言失败：', err);
