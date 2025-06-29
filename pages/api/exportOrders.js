@@ -11,27 +11,26 @@ const db = getFirestore();
 
 export default async function handler(req, res) {
   try {
-    // 获取当前直播 Post ID
+    // 获取当前贴文 ID
     const configDoc = await db.collection('config').doc('last_post_id').get();
     const post_id = configDoc.data()?.post_id;
     if (!post_id) {
       return res.status(400).json({ error: '无法获取当前直播贴文 ID' });
     }
 
-    // 查询 triggered_comments 中所有 status 为 sent 的订单
+    // ✅ 不再判断 status，导出所有留言订单
     const snapshot = await db
       .collection('triggered_comments')
       .where('post_id', '==', post_id)
-      .where('status', '==', 'sent')
-      .orderBy('sent_at', 'desc')
+      .orderBy('post_id') // 任意排序，避免索引冲突
       .limit(1000)
       .get();
 
     if (snapshot.empty) {
-      return res.status(404).json({ error: '当前直播没有已付款订单' });
+      return res.status(404).json({ error: '当前直播没有留言订单' });
     }
 
-    // 整理精简数据
+    // ✅ 仅导出四个字段
     const rows = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -42,16 +41,15 @@ export default async function handler(req, res) {
       };
     });
 
-    // 转换为 Excel 并发送
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '订单');
 
     const buffer = await writeToBuffer(workbook);
-    res.setHeader('Content-Disposition', 'attachment; filename="订单清单.xlsx"');
+    res.setHeader('Content-Disposition', 'attachment; filename="直播订单.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.status(200).send(buffer);
-
+    
   } catch (err) {
     console.error('[导出失败]', err);
     res.status(500).json({ error: '导出失败', detail: err.message });
