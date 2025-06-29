@@ -3,12 +3,14 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { writeToBuffer } from 'xlsx';
 import * as XLSX from 'xlsx';
 
+// 初始化 Firebase Admin SDK
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
 const db = getFirestore();
 
+// 时间格式化函数
 function formatTimestamp(ts) {
   if (typeof ts === 'number') {
     return new Date(ts).toLocaleString('zh-CN', { hour12: false });
@@ -19,16 +21,17 @@ function formatTimestamp(ts) {
   return '';
 }
 
+// API 主函数
 export default async function handler(req, res) {
   try {
-    // ✅ 获取当前直播 Post ID
+    // ✅ 获取当前直播的贴文 ID
     const configDoc = await db.collection('config').doc('last_post_id').get();
     const post_id = configDoc.data()?.post_id;
     if (!post_id) {
       return res.status(400).json({ error: '无法获取当前直播贴文 ID' });
     }
 
-    // ✅ 查询当前直播所有已发送订单
+    // ✅ 查询 triggered_comments 中所有已发送的订单
     const snapshot = await db
       .collection('triggered_comments')
       .where('post_id', '==', post_id)
@@ -41,6 +44,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '当前直播没有已付款订单' });
     }
 
+    // ✅ 整理导出数据
     const rows = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -56,6 +60,7 @@ export default async function handler(req, res) {
       };
     });
 
+    // ✅ 转换为 Excel 并发送下载
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '订单');
