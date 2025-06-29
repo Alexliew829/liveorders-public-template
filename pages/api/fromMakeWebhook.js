@@ -27,25 +27,22 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '已忽略主页留言' });
     }
 
-    // ✅ 提取商品编号
-    const match = message.match(/[aAbB][\s\-]*0{0,2}(\d{1,3})/);
+    // ✅ 更宽容地提取商品编号（如 A32、a_32、B-004、A 101）
+    const match = message.match(/[aAbB][\s\-_.～]*0{0,2}(\d{1,3})/);
     if (!match) {
       return res.status(200).json({ message: '无有效商品编号' });
     }
 
     let prefix = match[0][0].toUpperCase(); // A or B
-    let number = match[1].padStart(2, '0'); // 补0为两位数以上
+    let number = match[1].padStart(3, '0'); // 始终三位数，如 032、101
     const selling_id = `${prefix}${number}`;
 
-    // ✅ 查询商品信息
+    // ✅ 查询商品信息（只写入存在于 live_products 的编号）
     const productRef = db.collection('live_products').doc(selling_id);
     const productSnap = await productRef.get();
-
-    // ⛔ 商品不存在，跳过写入
     if (!productSnap.exists) {
       return res.status(200).json({ message: `编号 ${selling_id} 不存在于商品列表中，已忽略` });
     }
-
     const product = productSnap.data();
 
     const payload = {
@@ -71,7 +68,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'B类留言已写入', doc_id: selling_id });
 
     } else {
-      const docId = selling_id + '_' + comment_id;
+      const docId = `${selling_id}_${comment_id}`;
       await db.collection('triggered_comments').doc(docId).set(payload);
       return res.status(200).json({ message: 'A类留言已写入（多人）', doc_id: docId });
     }
