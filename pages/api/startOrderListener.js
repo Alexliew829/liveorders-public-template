@@ -18,16 +18,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 1. 清空旧数据
-    const collections = ['live_products', 'triggered_comments'];
-    for (const col of collections) {
-      const snapshot = await db.collection(col).get();
-      const batch = db.batch();
-      snapshot.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    }
+    // ✅ 只清空 live_products，不影响订单记录
+    const snapshot = await db.collection('live_products').get();
+    const batch = db.batch();
+    snapshot.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
 
-    // ✅ 2. 获取最新贴文 ID
+    // ✅ 获取最新贴文 ID
     const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
@@ -35,7 +32,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
 
-    // ✅ 3. 抓取留言
+    // ✅ 抓取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
@@ -44,7 +41,7 @@ export default async function handler(req, res) {
 
     for (const comment of comments) {
       const { message, id: comment_id, from } = comment;
-      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页自己留言
+      if (!message || !from || from.id !== PAGE_ID) continue; // 只处理主页留言
 
       // ✅ 提取编号（A/B + 数字）
       const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
@@ -63,17 +60,11 @@ export default async function handler(req, res) {
 
       // ✅ 提取商品名称（去编号 + 去价格 + 最多9字）
       let name = message;
+      name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, ''); // 去编号
+      name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}\s*$/i, ''); // 去价格
+      name = name.trim().slice(0, 9); // 限9字
 
-      // 去掉前缀编号（如 A101、B 333 等）
-      name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
-
-      // 去掉尾部价格（无论是否有 RM 前缀）
-      name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}\s*$/i, '');
-
-      // 去掉前后空格，再限制9个字
-      name = name.trim().slice(0, 9);
-
-      // ✅ 写入 Firestore
+      // ✅ 写入 live_products
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
         type,
