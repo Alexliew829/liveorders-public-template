@@ -40,7 +40,13 @@ export default async function handler(req, res) {
     // ✅ 查询商品信息
     const productRef = db.collection('live_products').doc(selling_id);
     const productSnap = await productRef.get();
-    const product = productSnap.exists ? productSnap.data() : {};
+
+    // ⛔ 商品不存在，跳过写入
+    if (!productSnap.exists) {
+      return res.status(200).json({ message: `编号 ${selling_id} 不存在于商品列表中，已忽略` });
+    }
+
+    const product = productSnap.data();
 
     const payload = {
       post_id,
@@ -56,7 +62,6 @@ export default async function handler(req, res) {
     };
 
     if (prefix === 'B') {
-      // ✅ B 类商品：只写入一次
       const docRef = db.collection('triggered_comments').doc(selling_id);
       const docSnap = await docRef.get();
       if (docSnap.exists) {
@@ -66,7 +71,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'B类留言已写入', doc_id: selling_id });
 
     } else {
-      // ✅ A 类商品：可多人写入，每笔都用不同 Document ID
       const docId = selling_id + '_' + comment_id;
       await db.collection('triggered_comments').doc(docId).set(payload);
       return res.status(200).json({ message: 'A类留言已写入（多人）', doc_id: docId });
