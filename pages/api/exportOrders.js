@@ -1,6 +1,6 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
@@ -11,47 +11,40 @@ const db = getFirestore();
 
 export default async function handler(req, res) {
   try {
-    // 🔁 不再判断 post_id，导出所有 triggered_comments
-    const snapshot = await db
-      .collection('triggered_comments')
-      .orderBy('post_id')
-      .limit(1000)
-      .get();
-
+    const snapshot = await db.collection('triggered_comments').get();
     if (snapshot.empty) {
-      return res.status(404).json({ error: '目前没有任何订单记录' });
+      return res.status(400).json({ error: '导出失败', detail: '没有找到订单资料' });
     }
 
-    // 🔢 分析每个访客对每个商品的留言次数
-    const countMap = new Map();
-    for (const doc of snapshot.docs) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('订单');
+
+    worksheet.columns = [
+      { header: '访客名字', key: 'user_name', width: 30 },
+      { header: '商品编号', key: 'selling_id', width: 15 },
+      { header: '商品名称', key: 'product_name', width: 30 },
+      { header: '数量', key: 'quantity', width: 10 },
+      { header: '价格', key: 'price', width: 15 },
+    ];
+
+    snapshot.forEach(doc => {
       const data = doc.data();
-      const key = `${data.user_id || '匿名'}-${data.selling_id}`;
-      const count = countMap.get(key) || { ...data, quantity: 0 };
-      count.quantity++;
-      countMap.set(key, count);
-    }
+      worksheet.addRow({
+        user_name: data.user_name || '',
+        selling_id: data.selling_id,
+        product_name: data.product_name || '',
+        quantity: data.quantity || 1,
+        price: data.price || '',
+      });
+    });
 
-    const rows = Array.from(countMap.values()).map(entry => ({
-      顾客姓名: entry.user_name || '匿名',
-      商品编号: entry.selling_id || '',
-      商品名称: entry.product_name || '',
-      数量: entry.quantity,
-      单价: entry.price || '0.00',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, '订单');
-
-    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-    res.setHeader('Content-Disposition', 'attachment; filename="直播订单.xlsx"');
+    const buffer = await workbook.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.status(200).send(excelBuffer);
+    res.setHeader('Content-Disposition', "attachment; filename=orders.xlsx");
+    res.status(200).send(buffer);
 
   } catch (err) {
-    console.error('[导出失败]', err);
+    console.error('导出失败：', err);
     res.status(500).json({ error: '导出失败', detail: err.message });
   }
 }
