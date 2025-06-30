@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 固定列标题顺序
     sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
@@ -37,7 +36,9 @@ export default async function handler(req, res) {
       const data = doc.data();
       const qty = Number(data.quantity) || 0;
       const price = Number(
-        typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price || 0
+        typeof data.price === 'string'
+          ? data.price.replace(/,/g, '')
+          : data.price || 0
       );
 
       totalQty += qty;
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
       });
     });
 
-    // ✅ 添加总计行
+    // ✅ 添加空行 + 汇总行
     sheet.addRow({});
     sheet.addRow({
       product_name: '✅ 总计：',
@@ -65,8 +66,14 @@ export default async function handler(req, res) {
     const today = format(new Date(), 'dd-MM-yy', { locale: zhCN });
     const filename = `${today} Bonsai-Order.xlsx`;
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"`
+    );
     res.status(200).send(Buffer.from(buffer));
   } catch (err) {
     console.error('导出失败:', err);
