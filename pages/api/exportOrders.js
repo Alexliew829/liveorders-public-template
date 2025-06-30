@@ -1,7 +1,6 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import ExcelJS from 'exceljs';
-import { format } from 'date-fns';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
@@ -17,10 +16,10 @@ export default async function handler(req, res) {
     }
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('订单');
+    const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 设置固定列顺序
-    worksheet.columns = [
+    // ✅ 设置列标题（按指定顺序）
+    sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
       { header: '商品名称', key: 'product_name', width: 30 },
@@ -32,7 +31,7 @@ export default async function handler(req, res) {
     let totalQty = 0;
     let totalAmount = 0;
 
-    snapshot.forEach(doc => {
+    snapshot.forEach((doc) => {
       const data = doc.data();
       const qty = Number(data.quantity) || 0;
       const price = Number(
@@ -42,7 +41,7 @@ export default async function handler(req, res) {
       totalQty += qty;
       totalAmount += qty * price;
 
-      worksheet.addRow({
+      sheet.addRow({
         user_name: data.user_name || '',
         selling_id: data.selling_id || '',
         product_name: data.product_name || '',
@@ -53,15 +52,22 @@ export default async function handler(req, res) {
     });
 
     // ✅ 添加总计行
-    worksheet.addRow({});
-    worksheet.addRow({
-      user_name: '✅ 总计',
+    sheet.addRow({});
+    sheet.addRow({
+      user_name: '✅ 总计：',
       quantity: totalQty,
       price: totalAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
-    const today = format(new Date(), 'dd-MM-yy');
+
+    // ✅ 使用原生 JavaScript 生成日期
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = String(now.getFullYear()).slice(2);
+    const today = `${day}-${month}-${year}`;
+
     const filename = `${today} Bonsai-Order.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
