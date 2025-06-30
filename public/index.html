@@ -1,93 +1,56 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>订单系统</title>
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
+import ExcelJS from 'exceljs';
 
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="订单系统">
-  <style>
-    body {
-      font-family: sans-serif;
-      background-color: #f7f7f7;
-      text-align: center;
-      padding-top: 60px;
-    }
-    .icon {
-      width: 120px;
-      margin-bottom: 40px;
-    }
-    .button-container {
-      display: flex;
-      flex-direction: column;
-      gap: 30px;
-      align-items: center;
-    }
-    .action-button {
-      padding: 18px 32px;
-      font-size: 20px;
-      background-color: #228B22;
-      color: white;
-      font-weight: bold;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      width: 280px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    .action-button:hover {
-      background-color: #1a6f1a;
-    }
-  </style>
-</head>
-<body>
-  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
+const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+if (!getApps().length) {
+  initializeApp({ credential: cert(serviceAccount) });
+}
+const db = getFirestore();
 
-  <div class="button-container">
-    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
-    <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
-    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
-  </div>
-
-  <script>
-    async function call(api, isPost = false) {
-      try {
-        if (api.includes('exportOrders')) {
-          const res = await fetch(api, {
-            method: isPost ? 'POST' : 'GET'
-          });
-          const blob = await res.blob();
-
-          // ✅ 动态生成文件名（例如 30-06-25 Bonsai-Order.xlsx）
-          const today = new Date();
-          const day = String(today.getDate()).padStart(2, '0');
-          const month = String(today.getMonth() + 1).padStart(2, '0');
-          const year = String(today.getFullYear()).slice(2);
-          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
-
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          return;
-        }
-
-        // ✅ 处理其他 JSON 接口
-        const res = await fetch(api, {
-          method: isPost ? 'POST' : 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        const data = await res.json();
-        alert(data.message || JSON.stringify(data));
-      } catch (err) {
-        alert('❌ 错误：' + (err.message || '无法连接服务器'));
-      }
+export default async function handler(req, res) {
+  try {
+    const snapshot = await db.collection('triggered_comments').get();
+    if (snapshot.empty) {
+      return res.status(200).json({ message: '没有订单数据可导出！' });
     }
-  </script>
-</body>
-</html>
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('订单');
+
+    // ✅ 固定字段顺序与表头
+    sheet.columns = [
+      { header: '顾客名称', key: 'user_name', width: 20 },
+      { header: '商品编号', key: 'selling_id', width: 15 },
+      { header: '商品名称', key: 'product_name', width: 30 },
+      { header: '数量', key: 'quantity', width: 10 },
+      { header: '价格', key: 'price', width: 15 },
+      { header: '已发送连接', key: 'replied', width: 15 },
+    ];
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      sheet.addRow({
+        user_name: data.user_name || '',
+        selling_id: data.selling_id || '',
+        product_name: data.product_name || '',
+        quantity: 1,
+        price: data.price || '',
+        replied: data.replied ? '✅' : '❌',
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const today = format(new Date(), 'dd-MM-yy', { locale: zhCN });
+    const filename = `${today} Bonsai-Order.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('导出失败:', err);
+    res.status(500).json({ error: '导出失败', detail: err.message });
+  }
+}
