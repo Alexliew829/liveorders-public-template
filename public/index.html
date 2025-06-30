@@ -46,9 +46,12 @@ export default async function handler(req, res) {
     const today = format(new Date(), 'dd-MM-yy', { locale: zhCN });
     const filename = `${today} Bonsai-Order.xlsx`;
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.status(200).send(Buffer.from(buffer)); // ✅ 关键
+    res.status(200).send(Buffer.from(buffer)); // ✅ 下载关键
   } catch (err) {
     console.error('导出失败:', err);
     res.status(500).json({ error: '导出失败', detail: err.message });
