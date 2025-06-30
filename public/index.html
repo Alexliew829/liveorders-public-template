@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 固定字段顺序与表头
     sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
@@ -30,16 +29,40 @@ export default async function handler(req, res) {
       { header: '已发送连接', key: 'replied', width: 15 },
     ];
 
+    let totalQty = 0;
+    let totalAmount = 0;
+
     snapshot.forEach((doc) => {
       const data = doc.data();
+      const qty = Number(data.quantity) || 0;
+      const price = Number(
+        typeof data.price === 'string'
+          ? data.price.replace(/,/g, '')
+          : data.price || 0
+      );
+
+      totalQty += qty;
+      totalAmount += qty * price;
+
       sheet.addRow({
         user_name: data.user_name || '',
         selling_id: data.selling_id || '',
         product_name: data.product_name || '',
-        quantity: data.quantity || '',
-        price: data.price || '',
+        quantity: qty,
+        price: price.toFixed(2),
         replied: data.replied ? '✅' : '❌',
       });
+    });
+
+    // ✅ 添加统计行
+    sheet.addRow({});
+    sheet.addRow({
+      product_name: '✅ 总计：',
+      quantity: totalQty,
+      price: totalAmount.toLocaleString('en-MY', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
