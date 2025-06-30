@@ -55,22 +55,28 @@
     async function call(api, isPost = false) {
       try {
         if (api.includes('exportOrders')) {
-          // ✅ 下载 Excel 文件
           const res = await fetch(api, {
             method: isPost ? 'POST' : 'GET'
           });
           const blob = await res.blob();
+
+          // ✅ 修改为动态生成文件名
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'bonsai-orders.xlsx';
+          a.download = filename;
           document.body.appendChild(a);
           a.click();
           a.remove();
           return;
         }
 
-        // ✅ 处理其他 JSON 返回的接口
         const res = await fetch(api, {
           method: isPost ? 'POST' : 'GET',
           headers: { 'Content-Type': 'application/json' },
