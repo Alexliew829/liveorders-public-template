@@ -36,7 +36,7 @@ export default async function handler(req, res) {
         user_name: data.user_name || '',
         selling_id: data.selling_id || '',
         product_name: data.product_name || '',
-        quantity: 1,
+        quantity: data.quantity || '',
         price: data.price || '',
         replied: data.replied ? '✅' : '❌',
       });
