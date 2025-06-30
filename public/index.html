@@ -54,6 +54,23 @@
   <script>
     async function call(api, isPost = false) {
       try {
+        if (api.includes('exportOrders')) {
+          // ✅ 下载 Excel 文件
+          const res = await fetch(api, {
+            method: isPost ? 'POST' : 'GET'
+          });
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'bonsai-orders.xlsx';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+
+        // ✅ 处理其他 JSON 返回的接口
         const res = await fetch(api, {
           method: isPost ? 'POST' : 'GET',
           headers: { 'Content-Type': 'application/json' },
