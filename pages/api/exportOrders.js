@@ -1,5 +1,6 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { format } from 'date-fns';
 import ExcelJS from 'exceljs';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
@@ -18,35 +19,53 @@ export default async function handler(req, res) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('订单');
 
+    // ✅ 新字段顺序（排除 user_id 和 comment_id）
     worksheet.columns = [
+      { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
       { header: '商品名称', key: 'product_name', width: 30 },
-      { header: '价格', key: 'price', width: 12 },
-      { header: '顾客ID', key: 'user_id', width: 24 },
-      { header: '顾客名称', key: 'user_name', width: 20 },
-      { header: '留言ID', key: 'comment_id', width: 24 },
       { header: '数量', key: 'quantity', width: 10 },
-      { header: '已发送连接', key: 'replied', width: 12 }
+      { header: '价格', key: 'price', width: 15 },
+      { header: '已发送连接', key: 'replied', width: 15 },
     ];
 
-    snapshot.forEach(doc => {
+    let totalQty = 0;
+    let totalAmount = 0;
+
+    snapshot.forEach((doc) => {
       const data = doc.data();
+      const qty = Number(data.quantity) || 0;
+      const price = Number(
+        typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price || 0
+      );
+
+      totalQty += qty;
+      totalAmount += qty * price;
+
       worksheet.addRow({
+        user_name: data.user_name || '',
         selling_id: data.selling_id || '',
         product_name: data.product_name || '',
-        price: data.price || '',
-        user_id: data.user_id || '',
-        user_name: data.user_name || '',
-        comment_id: data.comment_id || '',
-        quantity: data.quantity || 1,
-        replied: data.replied ? '✅' : '❌'
+        quantity: qty,
+        price: price.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+        replied: data.replied ? '✅' : '❌',
       });
     });
 
+    // ✅ 添加总计行
+    worksheet.addRow({});
+    worksheet.addRow({
+      product_name: '✅ 总计：',
+      quantity: totalQty,
+      price: totalAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+    });
+
     const buffer = await workbook.xlsx.writeBuffer();
+    const today = format(new Date(), 'dd-MM-yy');
+    const filename = `${today} Bonsai-Order.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="bonsai-orders.xlsx"');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.status(200).send(Buffer.from(buffer));
   } catch (err) {
     res.status(500).json({ error: '导出失败', detail: err.message });
