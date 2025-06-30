@@ -45,8 +45,12 @@ export default async function handler(req, res) {
       await batch2.commit();
     }
 
-    // ✅ 更新最新 Post ID
-    await configRef.set({ post_id });
+    // ✅ 更新最新 Post ID（增强容错）
+    try {
+      await configRef.set({ post_id });
+    } catch (err) {
+      return res.status(500).json({ error: '写入 config.post_id 失败', details: err.message });
+    }
 
     // ✅ 获取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
