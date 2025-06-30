@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>导出订单</title>
+  <title>订单系统</title>
+
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="导出订单">
+  <meta name="apple-mobile-web-app-title" content="订单系统">
   <style>
     body {
       font-family: sans-serif;
@@ -45,17 +46,47 @@
   <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
-    <button class="action-button" onclick="downloadExcel()">📤 导出订单 Excel</button>
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
+    <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
   </div>
 
   <script>
-    function downloadExcel() {
-      const link = document.createElement('a');
-      link.href = '/api/exportOrders';  // ✅ 自动下载 Excel 接口
-      link.download = '';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    async function call(api, isPost = false) {
+      try {
+        if (api.includes('exportOrders')) {
+          const res = await fetch(api, {
+            method: isPost ? 'POST' : 'GET'
+          });
+          const blob = await res.blob();
+
+          // ✅ 动态生成文件名（例如 30-06-25 Bonsai-Order.xlsx）
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+
+        // ✅ 处理其他 JSON 接口
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('❌ 错误：' + (err.message || '无法连接服务器'));
+      }
     }
   </script>
 </body>
