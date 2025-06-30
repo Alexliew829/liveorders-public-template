@@ -7,37 +7,45 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
+
 const db = getFirestore();
 
 export default async function handler(req, res) {
   try {
-    // 获取当前贴文 ID
     const configDoc = await db.collection('config').doc('last_post_id').get();
     const post_id = configDoc.data()?.post_id;
     if (!post_id) {
       return res.status(400).json({ error: '无法获取当前直播贴文 ID' });
     }
 
-    // ✅ 不排序，避免触发索引错误
     const snapshot = await db
       .collection('triggered_comments')
       .where('post_id', '==', post_id)
+      .orderBy('post_id')
       .limit(1000)
       .get();
 
     if (snapshot.empty) {
-      return res.status(404).json({ error: '当前直播没有留言订单' });
+      return res.status(404).json({ error: '当前直播没有订单记录' });
     }
 
-    const rows = snapshot.docs.map(doc => {
+    // 分析重复留言（同一个 user 对同一个 selling_id）计为数量
+    const countMap = new Map();
+    for (const doc of snapshot.docs) {
       const data = doc.data();
-      return {
-        顾客姓名: data.user_name || '匿名',
-        商品编号: data.selling_id || '',
-        商品名称: data.product_name || '',
-        付款金额: data.price_raw ? parseFloat(data.price_raw).toFixed(2) : '0.00',
-      };
-    });
+      const key = `${data.user_id || '匿名'}-${data.selling_id}`;
+      const count = countMap.get(key) || { ...data, quantity: 0 };
+      count.quantity++;
+      countMap.set(key, count);
+    }
+
+    const rows = Array.from(countMap.values()).map(entry => ({
+      顾客姓名: entry.user_name || '匿名',
+      商品编号: entry.selling_id || '',
+      商品名称: entry.product_name || '',
+      数量: entry.quantity,
+      单价: entry.price || '0.00'
+    }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
