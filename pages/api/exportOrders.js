@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { format } from 'date-fns';
 import ExcelJS from 'exceljs';
+import { format } from 'date-fns';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('订单');
 
-    // ✅ 新字段顺序（排除 user_id 和 comment_id）
+    // ✅ 设置固定列顺序
     worksheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     let totalQty = 0;
     let totalAmount = 0;
 
-    snapshot.forEach((doc) => {
+    snapshot.forEach(doc => {
       const data = doc.data();
       const qty = Number(data.quantity) || 0;
       const price = Number(
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     // ✅ 添加总计行
     worksheet.addRow({});
     worksheet.addRow({
-      product_name: '✅ 总计：',
+      user_name: '✅ 总计',
       quantity: totalQty,
       price: totalAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
     });
@@ -68,6 +68,7 @@ export default async function handler(req, res) {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.status(200).send(Buffer.from(buffer));
   } catch (err) {
+    console.error('导出失败:', err);
     res.status(500).json({ error: '导出失败', detail: err.message });
   }
 }
