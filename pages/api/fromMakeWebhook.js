@@ -37,12 +37,12 @@ export default async function handler(req, res) {
     const number = match[1].padStart(3, '0'); // 补零到三位
     const selling_id = `${prefix}${number}`;
 
-    // ✅ 提取数量（如 A32-5）
-    let quantity = 1; // 默认数量为 1
-    const qtyMatch = message.match(/-\s*(\d{1,2})\b/);
+    // ✅ 提取数量（如 A32-5），默认 1，允许 -5 或－5（破折号）
+    let quantity = 1;
+    const qtyMatch = message.match(/[－\-–]\s*(\d{1,2})\b/); // 支持 -, －, –
     if (qtyMatch) {
       const parsedQty = parseInt(qtyMatch[1]);
-      if (!isNaN(parsedQty) && parsedQty >= 1) quantity = parsedQty;
+      if (!isNaN(parsedQty) && parsedQty > 0) quantity = parsedQty;
     }
 
     // ✅ 确保商品存在于 live_products
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
     };
 
     if (prefix === 'B') {
-      // ✅ B类商品，只记录第一位顾客，除非 force 模式
+      // ✅ B类商品，只记录第一位顾客，数量恒为 1（不可重复）
       const docRef = db.collection('triggered_comments').doc(selling_id);
       if (!isForce) {
         const docSnap = await docRef.get();
@@ -77,11 +77,11 @@ export default async function handler(req, res) {
           return res.status(200).json({ message: `编号 ${selling_id} 已有留言者（B类限一人）` });
         }
       }
-      await docRef.set(payload);
+      await docRef.set({ ...payload, quantity: 1 }); // B类强制为 1
       return res.status(200).json({ message: 'B类留言已写入', doc_id: selling_id });
 
     } else {
-      // ✅ A类商品，可多人留言，不重复写入除非 force
+      // ✅ A类商品：可多人、可自订数量
       const docId = `${selling_id}_${comment_id}`;
       if (!isForce) {
         const existing = await db.collection('triggered_comments').doc(docId).get();
@@ -94,6 +94,4 @@ export default async function handler(req, res) {
     }
 
   } catch (err) {
-    return res.status(500).json({ error: '写入失败', details: err.message });
-  }
-}
+    return res.status(500).
