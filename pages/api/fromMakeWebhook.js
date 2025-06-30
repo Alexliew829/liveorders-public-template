@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     const number = match[1].padStart(3, '0'); // 补零到三位
     const selling_id = `${prefix}${number}`;
 
-    // ✅ 提取数量（如 A32-5），默认 1，允许 -5 或－5（破折号）
+    // ✅ 提取数量（如 A32-5），默认 1，允许 -, －, –
     let quantity = 1;
     const qtyMatch = message.match(/[－\-–]\s*(\d{1,2})\b/); // 支持 -, －, –
     if (qtyMatch) {
@@ -94,4 +94,6 @@ export default async function handler(req, res) {
     }
 
   } catch (err) {
-    return res.status(500).
+    return res.status(500).json({ error: '写入失败', details: err.message });
+  }
+}
