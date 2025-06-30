@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const snapshot = await db
       .collection('triggered_comments')
       .where('post_id', '==', post_id)
-      .orderBy('post_id')
+      .orderBy('created_at')
       .limit(1000)
       .get();
 
@@ -29,23 +29,16 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '当前直播没有订单记录' });
     }
 
-    // 分析重复留言（同一个 user 对同一个 selling_id）计为数量
-    const countMap = new Map();
-    for (const doc of snapshot.docs) {
+    const rows = snapshot.docs.map(doc => {
       const data = doc.data();
-      const key = `${data.user_id || '匿名'}-${data.selling_id}`;
-      const count = countMap.get(key) || { ...data, quantity: 0 };
-      count.quantity++;
-      countMap.set(key, count);
-    }
-
-    const rows = Array.from(countMap.values()).map(entry => ({
-      顾客姓名: entry.user_name || '匿名',
-      商品编号: entry.selling_id || '',
-      商品名称: entry.product_name || '',
-      数量: entry.quantity,
-      单价: entry.price || '0.00'
-    }));
+      return {
+        顾客姓名: data.user_name || '匿名',
+        商品编号: data.selling_id || '',
+        商品名称: data.product_name || '',
+        数量: data.quantity ?? 1, // 新字段，默认为 1
+        单价: data.price || '0.00'
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
