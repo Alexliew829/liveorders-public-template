@@ -37,6 +37,14 @@ export default async function handler(req, res) {
     const number = match[1].padStart(3, '0'); // 补零到三位
     const selling_id = `${prefix}${number}`;
 
+    // ✅ 提取数量（如 A32-5）
+    let quantity = 1; // 默认数量为 1
+    const qtyMatch = message.match(/-\s*(\d{1,2})\b/);
+    if (qtyMatch) {
+      const parsedQty = parseInt(qtyMatch[1]);
+      if (!isNaN(parsedQty) && parsedQty >= 1) quantity = parsedQty;
+    }
+
     // ✅ 确保商品存在于 live_products
     const productRef = db.collection('live_products').doc(selling_id);
     const productSnap = await productRef.get();
@@ -57,6 +65,7 @@ export default async function handler(req, res) {
       selling_id,
       product_name: product.product_name || '',
       price: product.price || '',
+      quantity
     };
 
     if (prefix === 'B') {
