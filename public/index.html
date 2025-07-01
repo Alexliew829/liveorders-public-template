@@ -148,7 +148,7 @@ TNG 电子钱包付款链接：
 ${tngLink}
 </pre>`;
 
-          html += `<button class="action-button" onclick="sendPayment('${user}')">💳 发送付款连接</button><hr>`;
+          html += `<button class="action-button" onclick="sendPayment('${order.comment_id}', '${user}')">💳 发送付款连接</button><hr>`;
         }
 
         box.innerHTML = html;
@@ -157,8 +157,28 @@ ${tngLink}
       }
     }
 
-    function sendPayment(user) {
-      alert(`⚠️ 你点击了发送付款连接给：${user}。\n\n请将该顾客最后一次留言的 comment_id 发送至后端 API /api/manualSend 手动补发付款连接。`);
+    async function sendPayment(commentId, user) {
+      if (!commentId) {
+        alert(`❌ 无法取得 ${user} 的留言 ID，无法发送付款连接`);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/manualSend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment_id: commentId })
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          alert(`✅ 已成功发送付款连接给 ${user}`);
+        } else {
+          alert(`❌ 发送失败：${result.error || JSON.stringify(result)}`);
+        }
+      } catch (err) {
+        alert('❌ 无法连接服务器：' + err.message);
+      }
     }
   </script>
 </body>
