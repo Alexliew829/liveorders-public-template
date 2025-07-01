@@ -1,5 +1,7 @@
-<!-- 保持你现有 <head> 与样式不变，略过 -->
+<!-- ✅ HTML 挂载容器 -->
+<div id="orderResults" class="orders">请点击上方按钮获取订单</div>
 
+<!-- ✅ 修复后的脚本，仅优化结构和安全判断 -->
 <script>
   async function call(api, isPost = false) {
     try {
@@ -37,6 +39,7 @@
       const res = await fetch('/api/pendingOrders');
       const data = await res.json();
       const box = document.getElementById('orderResults');
+
       if (!Array.isArray(data) || data.length === 0) {
         box.innerHTML = '暂无待发订单';
         return;
@@ -62,7 +65,7 @@
 
         html += `<br><strong>总金额：RM${total.toFixed(2)}</strong><br>`;
 
-        // ✅ 付款说明块，便于复制
+        // ✅ 可复制付款信息区块
         html += `<pre>
 总金额：RM${total.toFixed(2)}
 Maybank：512389673060
@@ -71,18 +74,18 @@ TNG 电子钱包付款链接：
 ${tngLink}
 </pre>`;
 
-        // ✅ 按钮：只显示一个，作为“发送付款连接”操作
+        // ✅ 操作按钮
         html += `<button class="action-button" onclick="sendPayment('${user}')">💳 发送付款连接</button><hr>`;
       }
 
       box.innerHTML = html;
     } catch (err) {
-      alert('❌ 获取订单失败：' + err.message);
+      const box = document.getElementById('orderResults');
+      box.innerHTML = '❌ 获取订单失败：' + (err.message || '未知错误');
     }
   }
 
   function sendPayment(user) {
-    alert(`⚠️ 你点击了发送付款连接给：${user}。\n\n请将该顾客最后一次留言的 comment_id 发送至后端 API /api/manualSend 手动补发付款连接。`);
-    // 实际项目中，可通过传 comment_id 调用补发接口
+    alert(`⚠️ 你点击了发送付款连接给：${user}。\n\n请将该顾客最后一次留言的 comment_id 发送至 API /api/manualSend 手动补发连接。`);
   }
 </script>
