@@ -40,30 +40,21 @@
     .action-button:hover {
       background-color: #1a6f1a;
     }
-    .order-block {
-      margin: 30px auto;
-      max-width: 90%;
-      background: #fff;
+    .orders {
+      max-width: 600px;
+      margin: 40px auto;
+      text-align: left;
+      background: white;
       padding: 20px;
       border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      text-align: left;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      font-size: 16px;
+      line-height: 1.6;
     }
-    .order-block h3 {
-      margin-top: 0;
-      font-size: 20px;
-      color: #333;
-    }
-    .order-block ul {
-      list-style: none;
-      padding-left: 0;
-    }
-    .order-block ul li {
-      margin: 6px 0;
-    }
-    .pay-info {
-      margin-top: 12px;
-      font-size: 15px;
+    .orders strong {
+      font-size: 18px;
+      display: block;
+      margin-top: 1em;
     }
   </style>
 </head>
@@ -72,11 +63,11 @@
 
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
-    <button class="action-button" onclick="showOrders()">📋 显示待发订单</button>
+    <button class="action-button" onclick="showPendingOrders()">📋 显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
   </div>
 
-  <div id="order-container"></div>
+  <div id="orderResults" class="orders"></div>
 
   <script>
     async function call(api, isPost = false) {
@@ -85,8 +76,11 @@
           const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
           const blob = await res.blob();
           const today = new Date();
-          const filename = `${today.getDate().toString().padStart(2,'0')}-${(today.getMonth()+1).toString().padStart(2,'0')}-${today.getFullYear().toString().slice(2)} Bonsai-Order.xlsx`;
-          const url = URL.createObjectURL(blob);
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = filename;
@@ -95,6 +89,7 @@
           a.remove();
           return;
         }
+
         const res = await fetch(api, {
           method: isPost ? 'POST' : 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -106,39 +101,43 @@
       }
     }
 
-    async function showOrders() {
+    async function showPendingOrders() {
       try {
         const res = await fetch('/api/pendingOrders');
         const data = await res.json();
-        const container = document.getElementById('order-container');
-        container.innerHTML = '';
-
+        const box = document.getElementById('orderResults');
         if (!Array.isArray(data) || data.length === 0) {
-          container.innerHTML = '<p>暂无待发订单</p>';
+          box.innerHTML = '暂无待发订单';
           return;
         }
 
-        data.forEach(user => {
-          const block = document.createElement('div');
-          block.className = 'order-block';
+        const grouped = {};
+        for (const order of data) {
+          const key = order.user_name || '匿名顾客';
+          if (!grouped[key]) {
+            grouped[key] = [];
+          }
+          grouped[key].push(order);
+        }
 
-          block.innerHTML = `
-            <h3>${user.user_name}</h3>
-            <ul>
-              ${user.orders.map(o => `<li>📦 ${o.selling_id} ${o.product_name} × ${o.quantity} = RM${parseFloat(o.subtotal).toFixed(2)}</li>`).join('')}
-            </ul>
-            <strong>总金额：${user.total_amount}</strong>
-            <div class="pay-info">
-              <p>💰 Maybank: 512389673060</p>
-              <p>🏦 Public Bank: 3214928526</p>
-              <p>📲 <a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">TNG eWallet</a></p>
-            </div>
-          `;
+        let html = '';
+        for (const [user, items] of Object.entries(grouped)) {
+          html += `<strong>${user}</strong>`;
+          let total = 0;
+          html += items.map(item => {
+            const qty = item.quantity || 1;
+            const price = parseFloat(item.price) || 0;
+            const sub = qty * price;
+            total += sub;
+            return `▪️ ${item.selling_id} ${item.product_name} x${qty} = RM${sub.toFixed(2)}`;
+          }).join('<br>');
+          html += `<br>总金额：RM${total.toFixed(2)}<br>`;
+          html += `Maybank 512389673060<br>Public Bank 3214928526<br>TNG：<a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">点我付款</a><hr>`;
+        }
 
-          container.appendChild(block);
-        });
+        box.innerHTML = html;
       } catch (err) {
-        alert('❌ 加载失败：' + (err.message || '未知错误'));
+        alert('❌ 获取订单失败：' + err.message);
       }
     }
   </script>
