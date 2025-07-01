@@ -1,72 +1,146 @@
-<!-- ✅ HTML 挂载容器 -->
-<div id="orderResults" class="orders">请点击上方按钮获取订单</div>
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>订单系统</title>
 
-<!-- ✅ 修复后的脚本，仅优化结构和安全判断 -->
-<script>
-  async function call(api, isPost = false) {
-    try {
-      if (api.includes('exportOrders')) {
-        const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
-        const blob = await res.blob();
-        const today = new Date();
-        const day = String(today.getDate()).padStart(2, '0');
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const year = String(today.getFullYear()).toString().slice(2);
-        const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        return;
-      }
-
-      const res = await fetch(api, {
-        method: isPost ? 'POST' : 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      alert(data.message || JSON.stringify(data));
-    } catch (err) {
-      alert('❌ 错误：' + (err.message || '无法连接服务器'));
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="订单系统">
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      padding-top: 60px;
     }
-  }
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .action-button {
+      padding: 18px 32px;
+      font-size: 20px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+    .orders {
+      max-width: 700px;
+      margin: 40px auto;
+      text-align: left;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .orders strong {
+      font-size: 18px;
+      display: block;
+      margin-top: 1em;
+    }
+    pre {
+      background: #f0f0f0;
+      padding: 10px;
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
-  async function showPendingOrders() {
-    try {
-      const res = await fetch('/api/pendingOrders');
-      const data = await res.json();
-      const box = document.getElementById('orderResults');
+  <div class="button-container">
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
+    <button class="action-button" onclick="showPendingOrders()">📋 显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
+  </div>
 
-      if (!Array.isArray(data) || data.length === 0) {
-        box.innerHTML = '暂无待发订单';
-        return;
-      }
+  <div id="orderResults" class="orders"></div>
 
-      let html = '';
-      const tngLink = 'https://payment.tngdigital.com.my/sc/dRacq2iFOb';
-
-      for (const order of data) {
-        const user = order.user_name || '匿名顾客';
-        const items = order.items || [];
-        let total = 0;
-
-        html += `<strong>${user}</strong><br>`;
-
-        for (const item of items) {
-          const qty = item.quantity || 1;
-          const price = parseFloat(item.price) || 0;
-          const sub = qty * price;
-          total += sub;
-          html += `▪️ ${item.selling_id || ''} ${item.product_name || ''} x${qty} = RM${sub.toFixed(2)}<br>`;
+  <script>
+    async function call(api, isPost = false) {
+      try {
+        if (api.includes('exportOrders')) {
+          const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
+          const blob = await res.blob();
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
         }
 
-        html += `<br><strong>总金额：RM${total.toFixed(2)}</strong><br>`;
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('❌ 错误：' + (err.message || '无法连接服务器'));
+      }
+    }
 
-        // ✅ 可复制付款信息区块
-        html += `<pre>
+    async function showPendingOrders() {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+        const box = document.getElementById('orderResults');
+        if (!Array.isArray(data) || data.length === 0) {
+          box.innerHTML = '暂无待发订单';
+          return;
+        }
+
+        let html = '';
+        const tngLink = 'https://payment.tngdigital.com.my/sc/dRacq2iFOb';
+
+        for (const order of data) {
+          const user = order.user_name || '匿名顾客';
+          const items = order.items || [];
+          let total = 0;
+
+          html += `<strong>${user}</strong><br>`;
+
+          for (const item of items) {
+            const qty = item.quantity || 1;
+            const price = parseFloat(item.price) || 0;
+            const sub = qty * price;
+            total += sub;
+            html += `▪️ ${item.selling_id || ''} ${item.product_name || ''} x${qty} = RM${sub.toFixed(2)}<br>`;
+          }
+
+          html += `<br><strong>总金额：RM${total.toFixed(2)}</strong><br>`;
+          html += `<pre>
 总金额：RM${total.toFixed(2)}
 Maybank：512389673060
 Public Bank：3214928526
@@ -74,18 +148,18 @@ TNG 电子钱包付款链接：
 ${tngLink}
 </pre>`;
 
-        // ✅ 操作按钮
-        html += `<button class="action-button" onclick="sendPayment('${user}')">💳 发送付款连接</button><hr>`;
+          html += `<button class="action-button" onclick="sendPayment('${user}')">💳 发送付款连接</button><hr>`;
+        }
+
+        box.innerHTML = html;
+      } catch (err) {
+        alert('❌ 获取订单失败：' + err.message);
       }
-
-      box.innerHTML = html;
-    } catch (err) {
-      const box = document.getElementById('orderResults');
-      box.innerHTML = '❌ 获取订单失败：' + (err.message || '未知错误');
     }
-  }
 
-  function sendPayment(user) {
-    alert(`⚠️ 你点击了发送付款连接给：${user}。\n\n请将该顾客最后一次留言的 comment_id 发送至 API /api/manualSend 手动补发连接。`);
-  }
-</script>
+    function sendPayment(user) {
+      alert(`⚠️ 你点击了发送付款连接给：${user}。\n\n请将该顾客最后一次留言的 comment_id 发送至后端 API /api/manualSend 手动补发付款连接。`);
+    }
+  </script>
+</body>
+</html>
