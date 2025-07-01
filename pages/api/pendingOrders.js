@@ -24,18 +24,21 @@ export default async function handler(req, res) {
       const user = data.user_name || '匿名顾客';
       const key = user;
 
+      const rawPrice = typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price;
+      const unitPrice = parseFloat(rawPrice) || 0;
+
       const item = {
         selling_id: data.selling_id || '',
         product_name: data.product_name || '',
         quantity: data.quantity || 1,
-        price: parseFloat(data.price) || 0,
-        subtotal: (parseFloat(data.price) || 0) * (data.quantity || 1),
+        price: unitPrice,
+        subtotal: unitPrice * (data.quantity || 1),
       };
 
       if (!map.has(key)) {
         map.set(key, {
           user_name: user,
-          comment_id: data.comment_id || '',  // ✅ 添加 comment_id
+          comment_id: data.comment_id || '',
           items: [item],
           total: item.subtotal,
         });
@@ -43,7 +46,6 @@ export default async function handler(req, res) {
         const existing = map.get(key);
         existing.items.push(item);
         existing.total += item.subtotal;
-        // ✅ 始终保留最后一笔的 comment_id
         existing.comment_id = data.comment_id || existing.comment_id;
       }
     });
