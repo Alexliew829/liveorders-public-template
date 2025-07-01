@@ -1,5 +1,3 @@
-// pages/api/manualSend.js
-
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
@@ -13,28 +11,22 @@ const db = getFirestore();
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const { comment_id } = req.query;
+  const comment_id = req.method === 'POST' ? req.body?.comment_id : req.query?.comment_id;
 
   if (!comment_id) {
     return res.status(400).json({ error: '缺少 comment_id 参数' });
   }
 
   try {
-    // ✅ 用 where 查询 comment_id 字段，而不是用 .doc(comment_id)
-    const snapshot = await db
-      .collection('triggered_comments')
-      .where('comment_id', '==', comment_id)
-      .limit(1)
-      .get();
+    const docRef = db.collection('triggered_comments').doc(comment_id);
+    const snap = await docRef.get();
 
-    if (snapshot.empty) {
+    if (!snap.exists) {
       return res.status(404).json({ error: '找不到对应留言' });
     }
 
-    const docRef = snapshot.docs[0].ref;
-    const data = snapshot.docs[0].data();
+    const data = snap.data();
 
-    // ✅ 若已发送过，不重复发送
     if (data.replied || data.status === 'sent') {
       return res.status(200).json({ message: '付款连接已发送，无需重复' });
     }
@@ -54,7 +46,7 @@ export default async function handler(req, res) {
 
     const priceDisplay = price_fmt || (typeof price === 'number'
       ? `RM${price.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
-      : price);
+      : `RM${parseFloat(price).toFixed(2)}`);
 
     const mentionName = user_name?.replace(/[^\w\s\u4e00-\u9fa5]/g, '');
     const replyMessage = [
