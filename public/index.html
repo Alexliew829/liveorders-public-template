@@ -2,108 +2,144 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>订单系统</title>
+
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="订单系统">
   <style>
     body {
-      background: #f8f8f8;
+      font-family: sans-serif;
+      background-color: #f7f7f7;
       text-align: center;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 30px;
+      padding-top: 60px;
     }
-    img {
+    .icon {
       width: 120px;
-      margin-bottom: 20px;
+      margin-bottom: 40px;
     }
-    button {
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .action-button {
+      padding: 18px 32px;
       font-size: 20px;
-      padding: 14px 28px;
-      margin: 12px auto;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
       border: none;
       border-radius: 12px;
-      background-color: #2e7d32;
-      color: white;
-      display: block;
-      width: 260px;
-      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
-    .order {
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+    .order-block {
+      margin: 30px auto;
+      max-width: 90%;
       background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      padding: 16px;
-      margin: 20px auto;
-      width: 90%;
-      max-width: 500px;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       text-align: left;
     }
-    .order pre {
-      font-size: 14px;
-      white-space: pre-wrap;
+    .order-block h3 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #333;
     }
-    .send-btn {
-      margin-top: 10px;
-      background: #c62828;
+    .order-block ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    .order-block ul li {
+      margin: 6px 0;
+    }
+    .pay-info {
+      margin-top: 12px;
+      font-size: 15px;
     }
   </style>
 </head>
 <body>
-  <img src="/apple-touch-icon.png" alt="Logo">
-  <button onclick="location.href='/api/startOrderListener'">🌱 记录商品资料</button>
-  <button onclick="loadOrders()">📋 显示待发订单</button>
-  <button onclick="location.href='/api/exportOrders'">📤 导出订单 Excel</button>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
-  <div id="orderList"></div>
+  <div class="button-container">
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
+    <button class="action-button" onclick="showOrders()">📋 显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
+  </div>
+
+  <div id="order-container"></div>
+
   <script>
-    async function loadOrders() {
-      const res = await fetch('/api/pendingOrders');
-      const orders = await res.json();
-      const grouped = {};
-
-      for (const order of orders) {
-        const name = order.user_name || '匿名用户';
-        if (!grouped[name]) grouped[name] = [];
-        grouped[name].push(order);
-      }
-
-      const container = document.getElementById('orderList');
-      container.innerHTML = '';
-
-      if (orders.length === 0) {
-        container.innerHTML = '<p>暂无待发订单</p>';
-        return;
-      }
-
-      for (const [name, items] of Object.entries(grouped)) {
-        let total = 0;
-        let msg = `${name}\n`;
-
-        for (const item of items) {
-          const qty = parseInt(item.quantity) || 1;
-          const price = parseFloat(item.price) || 0;
-          const subtotal = qty * price;
-          total += subtotal;
-          msg += `${item.selling_id} ${item.product_name} ${qty} x ${price.toFixed(2)}\n`;
+    async function call(api, isPost = false) {
+      try {
+        if (api.includes('exportOrders')) {
+          const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
+          const blob = await res.blob();
+          const today = new Date();
+          const filename = `${today.getDate().toString().padStart(2,'0')}-${(today.getMonth()+1).toString().padStart(2,'0')}-${today.getFullYear().toString().slice(2)} Bonsai-Order.xlsx`;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
         }
-
-        msg += `合计：RM ${total.toFixed(2)}\n\n`;
-        msg += `Lover Legend Adenium\nMaybank 512389673060\nPublic Bank 3214928526\n\nTNG link\nhttps://payment.tngdigital.com.my/sc/dRacq2iFOb`;
-
-        const div = document.createElement('div');
-        div.className = 'order';
-        div.innerHTML = `<pre>${msg}</pre><button class='send-btn' onclick='sendLink("${items[0].comment_id}")'>发送付款连接</button>`;
-        container.appendChild(div);
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('❌ 错误：' + (err.message || '无法连接服务器'));
       }
     }
 
-    async function sendLink(comment_id) {
-      const res = await fetch(`/api/manualSend?comment_id=${comment_id}`);
-      const data = await res.json();
-      alert(data.message || '已尝试发送');
-      loadOrders();
+    async function showOrders() {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+        const container = document.getElementById('order-container');
+        container.innerHTML = '';
+
+        if (!Array.isArray(data) || data.length === 0) {
+          container.innerHTML = '<p>暂无待发订单</p>';
+          return;
+        }
+
+        data.forEach(user => {
+          const block = document.createElement('div');
+          block.className = 'order-block';
+
+          block.innerHTML = `
+            <h3>${user.user_name}</h3>
+            <ul>
+              ${user.orders.map(o => `<li>📦 ${o.selling_id} ${o.product_name} × ${o.quantity} = RM${parseFloat(o.subtotal).toFixed(2)}</li>`).join('')}
+            </ul>
+            <strong>总金额：${user.total_amount}</strong>
+            <div class="pay-info">
+              <p>💰 Maybank: 512389673060</p>
+              <p>🏦 Public Bank: 3214928526</p>
+              <p>📲 <a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">TNG eWallet</a></p>
+            </div>
+          `;
+
+          container.appendChild(block);
+        });
+      } catch (err) {
+        alert('❌ 加载失败：' + (err.message || '未知错误'));
+      }
     }
   </script>
 </body>
