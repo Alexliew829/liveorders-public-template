@@ -27,7 +27,8 @@ export default async function handler(req, res) {
 
     const data = snap.data();
 
-    if (data.status === 'sent' || data.replied) {
+    // ✅ 已发送过就不重复发
+    if (data.replied || data.status === 'sent') {
       return res.status(200).json({ message: '付款连接已发送，无需重复' });
     }
 
@@ -35,13 +36,23 @@ export default async function handler(req, res) {
       user_name,
       payment_url,
       product_name = '',
-      price_fmt = '',
+      price = '',
+      price_fmt,
       selling_id = ''
     } = data;
 
+    if (!payment_url) {
+      return res.status(400).json({ error: '缺少付款链接，无法发送' });
+    }
+
+    // ✅ 自动格式化价格（如果没有 price_fmt）
+    const priceDisplay = price_fmt || (typeof price === 'number'
+      ? `RM${price.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
+      : price);
+
     const replyMessage = [
       user_name ? `感谢下单 @${user_name} 🙏` : `感谢您的下单 🙏`,
-      `${selling_id} ${product_name} ${price_fmt}`,
+      `${selling_id} ${product_name} ${priceDisplay}`,
       `付款连接：${payment_url}`,
       `⚠️ 请在 60 分钟内完成付款，逾期将取消订单 ⚠️`
     ].join('\n');
