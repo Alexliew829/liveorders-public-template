@@ -13,7 +13,8 @@ const db = getFirestore();
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const { comment_id } = req.query;
+  const comment_id =
+    req.method === 'POST' ? req.body.comment_id : req.query.comment_id;
 
   if (!comment_id) {
     return res.status(400).json({ error: '缺少 comment_id 参数' });
