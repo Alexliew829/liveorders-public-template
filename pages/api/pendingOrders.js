@@ -1,3 +1,4 @@
+// pages/api/pendingOrders.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -9,7 +10,6 @@ const db = getFirestore();
 
 export default async function handler(req, res) {
   try {
-    // 读取全部未发送的订单
     const snapshot = await db
       .collection('triggered_comments')
       .where('replied', '==', false)
@@ -20,31 +20,28 @@ export default async function handler(req, res) {
     snapshot.forEach(doc => allOrders.push(doc.data()));
 
     const result = [];
-    const aCounts = {}; // A类商品下单计数
-    const bSeen = new Set(); // B类商品只记录第一个
+    const bSeen = new Set();
 
     for (const data of allOrders) {
-      const selling_id = data.selling_id || '';
-      const isA = selling_id.trim().toUpperCase().startsWith('A');
-      const isB = selling_id.trim().toUpperCase().startsWith('B');
+      const selling_id = (data.selling_id || '').trim().toUpperCase();
+      const isA = selling_id.startsWith('A');
+      const isB = selling_id.startsWith('B');
 
+      // A类商品：全部加入
       if (isA) {
-        const count = aCounts[selling_id] || 0;
-        const limit = parseInt(data.quantity || 1);
-        if (count < limit) {
-          aCounts[selling_id] = count + 1;
-          result.push({
-            comment_id: data.comment_id,
-            user_name: data.user_name || '',
-            selling_id: data.selling_id,
-            product_name: data.product_name,
-            quantity: data.quantity || 1,
-            price: data.price || '',
-            price_fmt: data.price_fmt || '',
-            payment_url: data.payment_url || '',
-          });
-        }
-      } else if (isB && !bSeen.has(selling_id)) {
+        result.push({
+          comment_id: data.comment_id,
+          user_name: data.user_name || '',
+          selling_id: data.selling_id,
+          product_name: data.product_name,
+          quantity: data.quantity || 1,
+          price: data.price || '',
+          payment_url: data.payment_url || '',
+        });
+      }
+
+      // B类商品：只加入第一位留言者
+      else if (isB && !bSeen.has(selling_id)) {
         bSeen.add(selling_id);
         result.push({
           comment_id: data.comment_id,
@@ -53,7 +50,6 @@ export default async function handler(req, res) {
           product_name: data.product_name,
           quantity: data.quantity || 1,
           price: data.price || '',
-          price_fmt: data.price_fmt || '',
           payment_url: data.payment_url || '',
         });
       }
