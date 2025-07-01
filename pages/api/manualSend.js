@@ -11,7 +11,7 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const comment_id = req.query.comment_id;
+  const comment_id = req.query.comment_id || req.body?.comment_id;
   if (!comment_id) return res.status(400).json({ error: '缺少 comment_id 参数' });
 
   try {
@@ -19,9 +19,9 @@ export default async function handler(req, res) {
     const commentSnap = await db.collection('triggered_comments').doc(comment_id).get();
     if (!commentSnap.exists) return res.status(404).json({ error: '找不到该留言记录' });
 
-    const { user_name, user_id, selling_id } = commentSnap.data();
+    const { user_name, user_id } = commentSnap.data();
 
-    // 获取该用户所有下单商品
+    // 获取该用户所有下单商品（不限制 comment_id，只看 user_id）
     const orderSnap = await db.collection('triggered_comments')
       .where('user_id', '==', user_id)
       .get();
@@ -31,14 +31,17 @@ export default async function handler(req, res) {
 
     for (const doc of orderSnap.docs) {
       const { selling_id, product_name, price, quantity } = doc.data();
-      const subtotal = parseFloat(price) * parseInt(quantity);
+      const qty = parseInt(quantity) || 1;
+      const unit = parseFloat(price) || 0;
+      const subtotal = qty * unit;
       total += subtotal;
-      productLines.push(`▪️ ${selling_id} ${product_name} RM${parseFloat(price).toFixed(2)} x${quantity} = RM${subtotal.toFixed(2)}`);
+
+      productLines.push(`▪️ ${selling_id} ${product_name} RM${unit.toFixed(2)} x${qty} = RM${subtotal.toFixed(2)}`);
     }
 
     const totalStr = `总金额：RM${total.toFixed(2)}`;
     const paymentMessage = [
-      `感谢下单 ${user_name} 🙏`,
+      `感谢下单 ${user_name || '顾客'} 🙏`,
       ...productLines,
       totalStr,
       `付款方式：`,
