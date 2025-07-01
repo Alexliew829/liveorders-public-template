@@ -56,18 +56,6 @@
       display: block;
       margin-top: 1em;
     }
-    .send-button {
-      margin-top: 10px;
-      padding: 8px 16px;
-      background-color: #c0392b;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    .send-button:hover {
-      background-color: #962d22;
-    }
   </style>
 </head>
 <body>
@@ -125,15 +113,18 @@
 
         let html = '';
         for (const order of data) {
-          html += `<strong>${order.user_name || '匿名顾客'}</strong>`;
+          html += `<strong>${order.user_name || '匿名顾客'}</strong><br>`;
           html += order.items.map(item => {
-            return `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`
-              + `<br><button class="send-button" onclick="sendPayment('${item.comment_id}')">📩 发送付款连接</button>`;
+            return `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`;
           }).join('<br>');
-          html += `<br>总金额：RM${order.total.toFixed(2)}<br>`;
-          html += `Maybank 512389673060<br>Public Bank 3214928526<br>`;
-          html += `TNG：<a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">点我付款</a><hr>`;
+          html += `<br><br>`;
+          html += `<button class="action-button" onclick="sendPayment('${order.comment_id}')">📩 发送付款连接</button><br><br>`;
+          html += `总金额：RM${order.total.toFixed(2)}<br>`;
+          html += `Maybank：512389673060<br>`;
+          html += `Public Bank：3214928526<br>`;
+          html += `TNG 电子钱包付款链接：<a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">点击这里</a><hr>`;
         }
+
         box.innerHTML = html;
       } catch (err) {
         alert('❌ 获取订单失败：' + err.message);
@@ -141,18 +132,12 @@
     }
 
     async function sendPayment(commentId) {
-      if (!commentId) return alert('❌ 缺少 comment ID');
-      if (!confirm('确定发送付款连接？')) return;
       try {
         const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
         const data = await res.json();
-        if (data.success) {
-          alert('✅ 发送成功');
-        } else {
-          alert('⚠️ ' + (data.message || '发送失败'));
-        }
+        alert(data.message || JSON.stringify(data));
       } catch (err) {
-        alert('❌ 发送错误：' + err.message);
+        alert('❌ 发送失败：' + err.message);
       }
     }
   </script>
