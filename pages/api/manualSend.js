@@ -1,5 +1,4 @@
-// pages/api/manualSend.js
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
@@ -8,71 +7,66 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 
-const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 const PAGE_ID = process.env.PAGE_ID;
+const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const { comment_id } = req.query;
+  const comment_id = req.query.comment_id;
   if (!comment_id) return res.status(400).json({ error: '缺少 comment_id 参数' });
 
   try {
-    // 获取订单数据
-    const orderSnapshot = await db.collection('triggered_comments').doc(comment_id).get();
-    if (!orderSnapshot.exists) return res.status(404).json({ error: '订单不存在' });
+    // 获取该留言记录
+    const commentSnap = await db.collection('triggered_comments').doc(comment_id).get();
+    if (!commentSnap.exists) return res.status(404).json({ error: '找不到该留言记录' });
 
-    const orderData = orderSnapshot.data();
-    if (orderData.replied) {
-      return res.status(200).json({ message: '该订单已发送过付款信息，无需重复发送。' });
-    }
+    const { user_name, user_id, selling_id } = commentSnap.data();
 
-    const customer = orderData.user_name || '顾客';
-
-    // 获取该顾客的所有订单（同一个 user_name 且 replied 为 false）
-    const allOrdersSnapshot = await db.collection('triggered_comments')
-      .where('user_name', '==', orderData.user_name)
-      .where('replied', '==', false)
+    // 获取该用户所有下单商品
+    const orderSnap = await db.collection('triggered_comments')
+      .where('user_id', '==', user_id)
       .get();
 
-    if (allOrdersSnapshot.empty) {
-      return res.status(404).json({ error: '找不到未发送连接的订单。' });
-    }
-
-    let items = [];
     let total = 0;
+    let productLines = [];
 
-    for (const doc of allOrdersSnapshot.docs) {
-      const item = doc.data();
-      const quantity = item.quantity || 1;
-      const price = item.price || 0;
-      const lineTotal = quantity * price;
-      total += lineTotal;
-      items.push(`\u2022 ${item.selling_id} ${item.product_name} RM${price.toFixed(2)} x${quantity} = RM${lineTotal.toFixed(2)}`);
+    for (const doc of orderSnap.docs) {
+      const { selling_id, product_name, price, quantity } = doc.data();
+      const subtotal = parseFloat(price) * parseInt(quantity);
+      total += subtotal;
+      productLines.push(`▪️ ${selling_id} ${product_name} RM${parseFloat(price).toFixed(2)} x${quantity} = RM${subtotal.toFixed(2)}`);
     }
 
-    const paymentText = `感谢下单 ${customer} 🙏\n` +
-      items.join('\n') +
-      `\n总金额：RM${total.toFixed(2)}\n` +
-      `付款方式：\nMaybank：512389673060\nPublic Bank：3214928526\n` +
-      `TNG电子钱包：\nhttps://payment.tngdigital.com.my/sc/dRacq2iFOb`;
+    const totalStr = `总金额：RM${total.toFixed(2)}`;
+    const paymentMessage = [
+      `感谢下单 ${user_name} 🙏`,
+      ...productLines,
+      totalStr,
+      `付款方式：`,
+      `Maybank：512389673060`,
+      `Public Bank：3214928526`,
+      `TNG电子钱包：`,
+      `https://payment.tngdigital.com.my/sc/dRacq2iFOb`
+    ].join('\n');
 
-    // 发送留言回复
-    await fetch(`https://graph.facebook.com/v18.0/${comment_id}/comments?access_token=${PAGE_TOKEN}`, {
+    // 发出留言回复
+    const url = `https://graph.facebook.com/${comment_id}/comments`;
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: paymentText })
+      body: JSON.stringify({
+        message: paymentMessage,
+        access_token: PAGE_TOKEN
+      })
     });
 
-    // 更新所有订单为已回复
-    const batch = db.batch();
-    allOrdersSnapshot.docs.forEach(doc => {
-      batch.update(doc.ref, { replied: true });
-    });
-    await batch.commit();
+    const fbRes = await r.json();
+    if (!r.ok) return res.status(500).json({ error: '发送失败', fbRes });
 
-    return res.status(200).json({ message: '已成功发送付款信息并更新状态。' });
+    // 更新状态为已发连接
+    await db.collection('triggered_comments').doc(comment_id).update({ replied: true });
 
+    return res.status(200).json({ success: true, total: total.toFixed(2), fbRes });
   } catch (err) {
-    console.error('发送失败：', err);
-    return res.status(500).json({ error: '服务器错误', details: err.message });
+    return res.status(500).json({ error: '系统错误', message: err.message });
   }
 }
