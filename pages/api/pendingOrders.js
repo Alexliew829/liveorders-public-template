@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       if (!map.has(key)) {
         map.set(key, {
           user_name: user,
-          comment_id: data.comment_id || '', // ✅ 加入 comment_id
+          comment_id: data.comment_id || '',  // ✅ 添加 comment_id
           items: [item],
           total: item.subtotal,
         });
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         const existing = map.get(key);
         existing.items.push(item);
         existing.total += item.subtotal;
-        // ✅ 永远保留最后一个 comment_id（最新留言）
+        // ✅ 始终保留最后一笔的 comment_id
         existing.comment_id = data.comment_id || existing.comment_id;
       }
     });
