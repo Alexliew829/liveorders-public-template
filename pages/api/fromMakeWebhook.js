@@ -57,6 +57,11 @@ export default async function handler(req, res) {
 
     const product = productSnap.data();
 
+    // ✅ 修改：清洗 price 字段为纯数字（防止含逗号或字符串）
+    const cleanPrice = typeof product.price === 'string'
+      ? parseFloat(product.price.replace(/,/g, ''))
+      : product.price || 0;
+
     // 准备写入 payload
     const payload = {
       post_id,
@@ -68,7 +73,7 @@ export default async function handler(req, res) {
       replied: false,
       selling_id,
       product_name: product.product_name || '',
-      price: product.price || '',
+      price: cleanPrice,
       quantity
     };
 
