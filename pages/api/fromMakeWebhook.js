@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
     // ✅ 提取数量（如 A32-5），默认 1，允许 -, －, –
     let quantity = 1;
-    const qtyMatch = message.match(/[－\-–]\s*(\d{1,2})\b/); // 支持 -, －, –
+    const qtyMatch = message.match(/[－\-–]\s*(\d{1,3})\b/); // 改为支持最多3位数
     if (qtyMatch) {
       const parsedQty = parseInt(qtyMatch[1]);
       if (!isNaN(parsedQty) && parsedQty > 0) quantity = parsedQty;
