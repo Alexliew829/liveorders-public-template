@@ -19,7 +19,6 @@ export default async function handler(req, res) {
     snapshot.forEach(doc => {
       const data = doc.data();
 
-      // ✅ 排除 replied: true，保留 false 或 undefined
       if (data.replied === true) return;
 
       const user = data.user_name || '匿名顾客';
@@ -36,6 +35,7 @@ export default async function handler(req, res) {
       if (!map.has(key)) {
         map.set(key, {
           user_name: user,
+          comment_id: data.comment_id || '', // ✅ 加入 comment_id
           items: [item],
           total: item.subtotal,
         });
@@ -43,6 +43,8 @@ export default async function handler(req, res) {
         const existing = map.get(key);
         existing.items.push(item);
         existing.total += item.subtotal;
+        // ✅ 永远保留最后一个 comment_id（最新留言）
+        existing.comment_id = data.comment_id || existing.comment_id;
       }
     });
 
