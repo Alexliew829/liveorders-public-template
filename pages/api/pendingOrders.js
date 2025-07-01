@@ -1,5 +1,3 @@
-// pages/api/pendingOrders.js
-
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -13,7 +11,6 @@ export default async function handler(req, res) {
   try {
     const snapshot = await db
       .collection('triggered_comments')
-      .where('replied', '==', false)
       .orderBy('created_at', 'asc')
       .get();
 
@@ -21,6 +18,10 @@ export default async function handler(req, res) {
 
     snapshot.forEach(doc => {
       const data = doc.data();
+
+      // ✅ 排除 replied: true，保留 false 或 undefined
+      if (data.replied === true) return;
+
       const user = data.user_name || '匿名顾客';
       const key = user;
 
