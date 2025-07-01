@@ -40,6 +40,31 @@
     .action-button:hover {
       background-color: #1a6f1a;
     }
+    .order-list {
+      margin-top: 40px;
+      padding: 0 20px;
+    }
+    .order-item {
+      background: white;
+      margin-bottom: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: left;
+    }
+    .send-button {
+      margin-top: 8px;
+      padding: 6px 12px;
+      font-size: 14px;
+      background-color: #c0392b;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .send-button:hover {
+      background-color: #a93226;
+    }
   </style>
 </head>
 <body>
@@ -47,20 +72,19 @@
 
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
-    <button class="action-button" onclick="call('/api/pendingOrders')">📋 显示待发订单</button>
+    <button class="action-button" onclick="showPendingOrders()">📋 显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
   </div>
+
+  <div id="orders" class="order-list"></div>
 
   <script>
     async function call(api, isPost = false) {
       try {
         if (api.includes('exportOrders')) {
-          const res = await fetch(api, {
-            method: isPost ? 'POST' : 'GET'
-          });
+          const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
           const blob = await res.blob();
 
-          // ✅ 修复模板字符串语法
           const today = new Date();
           const day = String(today.getDate()).padStart(2, '0');
           const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -85,6 +109,42 @@
         alert(data.message || JSON.stringify(data));
       } catch (err) {
         alert('❌ 错误：' + (err.message || '无法连接服务器'));
+      }
+    }
+
+    async function showPendingOrders() {
+      const res = await fetch('/api/pendingOrders');
+      const data = await res.json();
+      const container = document.getElementById('orders');
+      container.innerHTML = '';
+
+      if (!Array.isArray(data) || data.length === 0) {
+        container.innerHTML = '<p>暂无待发订单</p>';
+        return;
+      }
+
+      data.forEach(order => {
+        const div = document.createElement('div');
+        div.className = 'order-item';
+        div.innerHTML = `
+          <strong>${order.user_name || '匿名用户'}</strong><br>
+          ${order.selling_id} - ${order.product_name} - ${order.price}<br>
+          <button class="send-button" onclick="sendLink('${order.comment_id}')">发送付款连接</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function sendLink(commentId) {
+      const confirmSend = confirm('确定要发送付款连接吗？');
+      if (!confirmSend) return;
+
+      try {
+        const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
+        const result = await res.json();
+        alert(result.message || '已发送');
+      } catch (err) {
+        alert('❌ 发送失败：' + (err.message || '连接错误'));
       }
     }
   </script>
