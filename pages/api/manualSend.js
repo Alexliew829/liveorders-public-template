@@ -38,17 +38,21 @@ export default async function handler(req, res) {
 
       if (!productData) continue;
 
-      const price = parseFloat(productData.price_raw || 0);
-      const qty = parseInt(quantity);
-      const subtotal = price * qty;
-      total += subtotal;
+      const rawPrice = typeof productData.price === 'string'
+        ? productData.price.replace(/,/g, '')
+        : productData.price;
+      const price = parseFloat(rawPrice || 0);
+
+      const qty = parseInt(quantity) || 1;
+      const subtotal = +(price * qty).toFixed(2); // 精确小数
+      total = +(total + subtotal).toFixed(2);
 
       productLines.push(`▪️ ${selling_id} ${product_name} x${qty} = RM${subtotal.toFixed(2)}`);
     }
 
     const totalStr = `总金额：RM${total.toFixed(2)}`;
     const paymentMessage = [
-      `感谢下单 ${user_name} 🙏`,
+      `感谢下单 ${user_name || '顾客'} 🙏`,
       ...productLines,
       totalStr,
       `付款方式：`,
