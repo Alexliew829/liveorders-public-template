@@ -26,8 +26,8 @@ export default async function handler(req, res) {
       const key = user;
 
       const item = {
-        selling_id: data.selling_id,
-        product_name: data.product_name,
+        selling_id: data.selling_id || '',
+        product_name: data.product_name || '',
         quantity: data.quantity || 1,
         price: parseFloat(data.price) || 0,
         subtotal: (parseFloat(data.price) || 0) * (data.quantity || 1),
