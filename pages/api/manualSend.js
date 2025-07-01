@@ -1,5 +1,7 @@
+// pages/api/manualSend.js
+
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 
@@ -41,8 +43,8 @@ export default async function handler(req, res) {
       selling_id = ''
     } = data;
 
-    if (!payment_url) {
-      return res.status(400).json({ error: '缺少付款链接，无法发送' });
+    if (!payment_url || typeof payment_url !== 'string' || !payment_url.startsWith('http')) {
+      return res.status(400).json({ error: '付款链接格式无效，无法发送' });
     }
 
     // ✅ 自动格式化价格（如果没有 price_fmt）
@@ -50,8 +52,10 @@ export default async function handler(req, res) {
       ? `RM${price.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
       : price);
 
+    // ✅ 简单去除 user_name 中异常符号（避免 Facebook 无法 tag）
+    const mentionName = user_name?.replace(/[^\w\s\u4e00-\u9fa5]/g, '');
     const replyMessage = [
-      user_name ? `感谢下单 @${user_name} 🙏` : `感谢您的下单 🙏`,
+      user_name ? `感谢下单 @${mentionName} 🙏` : `感谢您的下单 🙏`,
       `${selling_id} ${product_name} ${priceDisplay}`,
       `付款连接：${payment_url}`,
       `⚠️ 请在 60 分钟内完成付款，逾期将取消订单 ⚠️`
@@ -75,7 +79,7 @@ export default async function handler(req, res) {
     await docRef.update({
       replied: true,
       status: 'sent',
-      sent_at: new Date()
+      sent_at: Timestamp.now()
     });
 
     return res.status(200).json({
