@@ -1,71 +1,127 @@
-// pages/api/pendingOrders.js
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>订单系统</title>
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-const db = getFirestore();
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="订单系统">
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      padding-top: 60px;
+    }
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .action-button {
+      padding: 18px 32px;
+      font-size: 20px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+    .orders {
+      max-width: 600px;
+      margin: 40px auto;
+      text-align: left;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .orders strong {
+      font-size: 18px;
+      display: block;
+      margin-top: 1em;
+    }
+  </style>
+</head>
+<body>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
-function formatCurrency(amount) {
-  return parseFloat(amount).toLocaleString('en-MY', {
-    style: 'currency',
-    currency: 'MYR',
-    minimumFractionDigits: 2,
-  });
-}
+  <div class="button-container">
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
+    <button class="action-button" onclick="showPendingOrders()">📋 显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
+  </div>
 
-export default async function handler(req, res) {
-  try {
-    const snapshot = await db
-      .collection('triggered_comments')
-      .where('replied', '==', false)
-      .orderBy('created_at', 'asc')
-      .get();
+  <div id="orderResults" class="orders"></div>
 
-    const groups = {};
+  <script>
+    async function call(api, isPost = false) {
+      try {
+        if (api.includes('exportOrders')) {
+          const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
+          const blob = await res.blob();
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
 
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const userId = data.user_id || 'anonymous';
-      const userName = data.user_name || '匿名用户';
-
-      if (!groups[userId]) {
-        groups[userId] = {
-          user_id: userId,
-          user_name: userName,
-          orders: [],
-          total: 0,
-          first_comment_id: data.comment_id,
-        };
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('❌ 错误：' + (err.message || '无法连接服务器'));
       }
+    }
 
-      const quantity = parseInt(data.quantity || 1);
-      const unitPrice = parseFloat(data.price || 0);
-      const subtotal = unitPrice * quantity;
-
-      groups[userId].orders.push({
-        selling_id: data.selling_id,
-        product_name: data.product_name,
-        quantity,
-        price: unitPrice.toFixed(2),
-        subtotal: subtotal.toFixed(2),
-      });
-
-      groups[userId].total += subtotal;
-    });
-
-    const result = Object.values(groups).map(group => ({
-      user_id: group.user_id,
-      user_name: group.user_name,
-      orders: group.orders,
-      total_amount: formatCurrency(group.total),
-      first_comment_id: group.first_comment_id,
-    }));
-
-    return res.status(200).json(result);
-  } catch (err) {
-    return res.status(500).json({ error: '读取订单失败', detail: err.message });
-  }
-}
+    async function showPendingOrders() {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+        const box = document.getElementById('orderResults');
+        if (!Array.isArray(data) || data.length === 0) {
+          box.innerHTML = '暂无待发订单';
+          return;
+        }
+        let html = '';
+        for (const person of data) {
+          html += `<strong>${person.user_name || '匿名顾客'}</strong>`;
+          html += person.items.map(item => `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`).join('<br>');
+          html += `<br>总金额：RM${person.total.toFixed(2)}<br>`;
+          html += `Maybank 512389673060<br>Public Bank 3214928526<br>TNG：<a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">点我付款</a><hr>`;
+        }
+        box.innerHTML = html;
+      } catch (err) {
+        alert('❌ 获取订单失败：' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
