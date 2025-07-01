@@ -41,7 +41,7 @@
       background-color: #1a6f1a;
     }
     .orders {
-      max-width: 600px;
+      max-width: 700px;
       margin: 40px auto;
       text-align: left;
       background: white;
@@ -55,6 +55,16 @@
       font-size: 18px;
       display: block;
       margin-top: 1em;
+    }
+    pre {
+      background: #f0f0f0;
+      padding: 10px;
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -111,33 +121,41 @@
           return;
         }
 
-        let html = '';
+        const grouped = {};
         for (const order of data) {
-          html += `<strong>${order.user_name || '匿名顾客'}</strong><br>`;
-          html += order.items.map(item => {
-            return `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`;
+          const key = order.user_name || '匿名顾客';
+          if (!grouped[key]) {
+            grouped[key] = [];
+          }
+          grouped[key].push(order);
+        }
+
+        let html = '';
+        for (const [user, items] of Object.entries(grouped)) {
+          html += `<strong>${user}</strong>`;
+          let total = 0;
+          html += items.map(item => {
+            const qty = item.quantity || 1;
+            const price = parseFloat(item.price) || 0;
+            const sub = qty * price;
+            total += sub;
+            return `▪️ ${item.selling_id} ${item.product_name} x${qty} = RM${sub.toFixed(2)}`;
           }).join('<br>');
-          html += `<br><br>`;
-          html += `<button class="action-button" onclick="sendPayment('${order.comment_id}')">📩 发送付款连接</button><br><br>`;
-          html += `总金额：RM${order.total.toFixed(2)}<br>`;
-          html += `Maybank：512389673060<br>`;
-          html += `Public Bank：3214928526<br>`;
-          html += `TNG 电子钱包付款链接：<a href="https://payment.tngdigital.com.my/sc/dRacq2iFOb" target="_blank">点击这里</a><hr>`;
+
+          // ✅ 添加复制用付款信息块
+          const tngLink = 'https://payment.tngdigital.com.my/sc/dRacq2iFOb';
+          html += `<br><br><strong>总金额：RM${total.toFixed(2)}</strong><br>`;
+          html += `<pre>
+总金额：RM${total.toFixed(2)}
+Maybank：512389673060
+Public Bank：3214928526
+TNG 电子钱包付款链接：${tngLink}
+</pre><hr>`;
         }
 
         box.innerHTML = html;
       } catch (err) {
         alert('❌ 获取订单失败：' + err.message);
-      }
-    }
-
-    async function sendPayment(commentId) {
-      try {
-        const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
-        const data = await res.json();
-        alert(data.message || JSON.stringify(data));
-      } catch (err) {
-        alert('❌ 发送失败：' + err.message);
       }
     }
   </script>
