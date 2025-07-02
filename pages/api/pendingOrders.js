@@ -21,8 +21,9 @@ export default async function handler(req, res) {
 
       if (data.replied === true) return;
 
-      const user = data.user_name || '匿名顾客';
-      const key = user;
+      const user_id = data.user_id || 'anonymous';
+      const user_name = data.user_name || '匿名顾客';
+      const key = user_id;
 
       const rawPrice = typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price;
       const unitPrice = parseFloat(rawPrice) || 0;
@@ -37,7 +38,8 @@ export default async function handler(req, res) {
 
       if (!map.has(key)) {
         map.set(key, {
-          user_name: user,
+          user_id,
+          user_name,
           comment_id: data.comment_id || '',
           items: [item],
           total: item.subtotal,
@@ -46,6 +48,7 @@ export default async function handler(req, res) {
         const existing = map.get(key);
         existing.items.push(item);
         existing.total += item.subtotal;
+        // 保留最晚的 comment_id 以便后续留言回复
         existing.comment_id = data.comment_id || existing.comment_id;
       }
     });
