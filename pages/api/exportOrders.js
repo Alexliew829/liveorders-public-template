@@ -23,26 +23,33 @@ export default async function handler(req, res) {
     '已发送连接',
   ]);
 
-  // 读取数据
+  // 读取留言订单数据
   const snapshot = await db.collection('triggered_comments').get();
-  const rows = [];
+  const orderMap = new Map();
+
   snapshot.forEach(doc => {
     const data = doc.data();
     if (!data.user_name || !data.selling_id || !data.product_name) return;
-    const price = parseFloat(data.price || 0);
-    const quantity = parseInt(data.quantity || 1);
-    rows.push({
-      name: data.user_name,
-      id: data.selling_id,
-      product: data.product_name,
-      quantity,
-      price,
-      total: price * quantity,
-      replied: data.replied ? '✓' : '✗',
-    });
+
+    const key = `${data.user_name}__${data.selling_id}`;
+    if (!orderMap.has(key)) {
+      const price = parseFloat(data.price || 0);
+      const quantity = parseInt(data.quantity || 1);
+      orderMap.set(key, {
+        name: data.user_name,
+        id: data.selling_id,
+        product: data.product_name,
+        quantity,
+        price,
+        total: price * quantity,
+        replied: data.replied ? '✓' : '✗',
+      });
+    }
   });
 
-  // 排序：顾客 + 商品编号
+  const rows = Array.from(orderMap.values());
+
+  // 排序：顾客名称 + 商品编号
   rows.sort((a, b) => {
     if (a.name === b.name) return a.id.localeCompare(b.id);
     return a.name.localeCompare(b.name);
@@ -57,11 +64,11 @@ export default async function handler(req, res) {
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
 
-    // 如果是新顾客，插入空行
     if (r.name !== current && current !== '') {
-      // 小计行上面加单线，下方加双线
+      // 小计前一行加上单线，上方边框
       const lastRow = sheet.lastRow;
       lastRow.getCell(4).border = { top: { style: 'thin' } };
+
       const subtotalRow = sheet.addRow([
         '',
         '',
@@ -75,7 +82,7 @@ export default async function handler(req, res) {
       subtotalRow.getCell(6).border = { bottom: { style: 'double' } };
       subtotalQty = 0;
       subtotalAmt = 0;
-      sheet.addRow([]); // 顾客间空行
+      sheet.addRow([]); // 空行分隔顾客
     }
 
     current = r.name;
@@ -95,9 +102,10 @@ export default async function handler(req, res) {
     ]);
   }
 
-  // 最后一组顾客的小计
+  // 最后一位顾客的小计
   const lastRow = sheet.lastRow;
   lastRow.getCell(4).border = { top: { style: 'thin' } };
+
   const subtotalRow = sheet.addRow([
     '',
     '',
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
 
   sheet.addRow([]); // 空行
 
-  // 总计
+  // 总计行
   const totalRow = sheet.addRow([
     '✓ 总计:',
     '',
@@ -134,7 +142,7 @@ export default async function handler(req, res) {
     col.width = maxLen;
   });
 
-  // 导出
+  // 导出 Excel
   const buffer = await workbook.xlsx.writeBuffer();
   res.setHeader(
     'Content-Type',
