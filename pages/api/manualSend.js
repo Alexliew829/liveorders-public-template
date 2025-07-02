@@ -11,7 +11,6 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  // ✅ 同时支持 GET 和 POST 方式传参
   const comment_id =
     req.method === 'POST' ? req.body.comment_id : req.query.comment_id;
 
@@ -20,7 +19,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 用 comment_id 字段查找（不是 doc ID）
     const querySnap = await db
       .collection('triggered_comments')
       .where('comment_id', '==', comment_id)
@@ -34,7 +32,6 @@ export default async function handler(req, res) {
     const commentSnap = querySnap.docs[0];
     const { user_name, user_id } = commentSnap.data();
 
-    // ✅ 获取该用户所有订单
     const orderSnap = await db.collection('triggered_comments')
       .where('user_id', '==', user_id)
       .get();
@@ -45,7 +42,6 @@ export default async function handler(req, res) {
     for (const doc of orderSnap.docs) {
       const { selling_id, product_name, quantity } = doc.data();
 
-      // ✅ 从 live_products 获取最新价格
       const productDoc = await db.collection('live_products').doc(selling_id).get();
       const productData = productDoc.exists ? productDoc.data() : null;
 
@@ -69,13 +65,13 @@ export default async function handler(req, res) {
       ...productLines,
       totalStr,
       `付款方式：`,
+      `Lover Legend Adenium`,
       `Maybank：512389673060`,
       `Public Bank：3214928526`,
       `TNG 电子钱包付款链接：`,
       `https://payment.tngdigital.com.my/sc/dRacq2iFOb`
     ].join('\n');
 
-    // ✅ 留言回复
     const url = `https://graph.facebook.com/${comment_id}/comments`;
     const r = await fetch(url, {
       method: 'POST',
@@ -91,7 +87,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: '发送失败', fbRes });
     }
 
-    // ✅ 更新 replied 状态
     await commentSnap.ref.update({ replied: true });
 
     return res.status(200).json({ success: true, total: total.toFixed(2), fbRes });
