@@ -97,7 +97,7 @@ export default async function handler(req, res) {
     }
 
     if (index === 7) { // G栏（第8列）“已发送连接”
-      maxLength = 12;
+      maxLength = 13;
     }
 
     col.width = maxLength;
