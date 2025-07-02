@@ -40,7 +40,7 @@ export default async function handler(req, res) {
         map.set(key, {
           user_id,
           user_name,
-          comment_id: data.comment_id || '',
+          comment_id: data.comment_id || '',  // ✅ 只设第一次的 comment_id
           items: [item],
           total: item.subtotal,
         });
@@ -48,8 +48,7 @@ export default async function handler(req, res) {
         const existing = map.get(key);
         existing.items.push(item);
         existing.total += item.subtotal;
-        // 保留最晚的 comment_id 以便后续留言回复
-        existing.comment_id = data.comment_id || existing.comment_id;
+        // ❌ 不再覆盖 existing.comment_id，保留最早一笔
       }
     });
 
