@@ -15,60 +15,94 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '没有订单可导出' });
     }
 
+    const data = snapshot.docs.map(doc => doc.data());
+
+    // ✅ 按 user_name 分组
+    const grouped = {};
+    for (const item of data) {
+      const name = item.user_name || '匿名用户';
+      if (!grouped[name]) grouped[name] = [];
+      grouped[name].push(item);
+    }
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 设置列标题（按指定顺序）
+    // ✅ 设置列标题
     sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
       { header: '商品名称', key: 'product_name', width: 30 },
       { header: '数量', key: 'quantity', width: 10 },
       { header: '价格', key: 'price', width: 15 },
+      { header: '总数', key: 'subtotal', width: 15 },
       { header: '已发送连接', key: 'replied', width: 15 },
     ];
 
     let totalQty = 0;
     let totalAmount = 0;
 
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const qty = Number(data.quantity) || 0;
-      const price = Number(
-        typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price || 0
-      );
+    for (const [name, orders] of Object.entries(grouped)) {
+      let subQty = 0;
+      let subTotal = 0;
 
-      totalQty += qty;
-      totalAmount += qty * price;
+      for (const item of orders) {
+        const qty = Number(item.quantity) || 0;
+        const price = Number(
+          typeof item.price === 'string' ? item.price.replace(/,/g, '') : item.price || 0
+        );
+        const amount = qty * price;
 
+        subQty += qty;
+        subTotal += amount;
+        totalQty += qty;
+        totalAmount += amount;
+
+        sheet.addRow({
+          user_name: name,
+          selling_id: item.selling_id || '',
+          product_name: item.product_name || '',
+          quantity: qty,
+          price: price.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+          subtotal: amount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+          replied: item.replied ? '✅' : '❌',
+        });
+      }
+
+      // ✅ 小计行
       sheet.addRow({
-        user_name: data.user_name || '',
-        selling_id: data.selling_id || '',
-        product_name: data.product_name || '',
-        quantity: qty,
-        price: price.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
-        replied: data.replied ? '✅' : '❌',
+        user_name: '',
+        selling_id: '',
+        product_name: '',
+        quantity: subQty,
+        price: '',
+        subtotal: subTotal.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+        replied: '',
       });
-    });
 
-    // ✅ 添加总计行
-    sheet.addRow({});
+      // ✅ 插入两行空白
+      sheet.addRow({});
+      sheet.addRow({});
+    }
+
+    // ✅ 最终总计行
     sheet.addRow({
       user_name: '✅ 总计：',
       quantity: totalQty,
-      price: totalAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+      price: '',
+      subtotal: totalAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
 
-    // ✅ 使用原生 JavaScript 生成日期
+    // ✅ 文件名：02-07-25 Bonsai-Order.xlsx
     const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = String(now.getFullYear()).slice(2);
-    const today = `${day}-${month}-${year}`;
-
-    const filename = `${today} Bonsai-Order.xlsx`;
+    const [day, month, year] = [
+      String(now.getDate()).padStart(2, '0'),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getFullYear()).slice(2),
+    ];
+    const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
