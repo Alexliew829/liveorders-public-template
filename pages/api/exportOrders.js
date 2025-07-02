@@ -1,6 +1,6 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import ExcelJS from 'exceljs';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
@@ -9,119 +9,97 @@ if (!getApps().length) {
 const db = getFirestore();
 
 export default async function handler(req, res) {
-  try {
-    const snapshot = await db.collection('triggered_comments').orderBy('created_at', 'asc').get();
-    const ordersMap = new Map();
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('订单');
 
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const user_id = data.user_id || 'anonymous';
-      const user_name = data.user_name || '匿名顾客';
+  // 设置标题栏样式
+  const header = ['顾客名称', '商品编号', '商品名称', '数量', '价格', '总数', '已发送连接'];
+  sheet.addRow(header);
+  sheet.getRow(1).font = { name: 'Calibri', size: 12, bold: true };
 
-      if (!ordersMap.has(user_id)) {
-        ordersMap.set(user_id, {
-          user_id,
-          user_name,
-          items: [],
-          hasReplied: false,
-        });
-      }
+  const triggeredSnapshot = await db.collection('triggered_comments').orderBy('user_name').get();
 
-      const order = ordersMap.get(user_id);
+  const grouped = {};
+  for (const doc of triggeredSnapshot.docs) {
+    const data = doc.data();
+    const name = data.user_name || '匿名用户';
+    if (!grouped[name]) grouped[name] = [];
+    grouped[name].push({ ...data, id: doc.id });
+  }
 
-      const rawPrice = typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price;
-      const unitPrice = parseFloat(rawPrice) || 0;
-      const quantity = parseInt(data.quantity || 1);
-      const subtotal = unitPrice * quantity;
+  let totalQty = 0;
+  let totalAmount = 0;
 
-      order.items.push({
-        selling_id: data.selling_id || '',
-        product_name: data.product_name || '',
+  const borderStyle = {
+    style: 'thin',
+    color: { argb: 'FF000000' },
+  };
+
+  for (const [customer, orders] of Object.entries(grouped)) {
+    let subQty = 0;
+    let subTotal = 0;
+    const startRow = sheet.lastRow.number + 1;
+
+    for (const order of orders) {
+      const { selling_id, product_name, price, replied, quantity = 1 } = order;
+      const total = Number(price) * Number(quantity);
+      subQty += Number(quantity);
+      subTotal += total;
+
+      sheet.addRow([
+        customer,
+        selling_id,
+        product_name,
         quantity,
-        price: unitPrice,
-        subtotal,
-        replied: data.replied || false,
-      });
-
-      if (data.replied) order.hasReplied = true;
-    });
-
-    // 创建 Excel
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('订单');
-    sheet.properties.defaultRowHeight = 20;
-
-    // 设置标题行
-    const header = ['顾客名称', '商品编号', '商品名称', '数量', '价格', '总数', '已发送连接'];
-    sheet.addRow(header);
-    sheet.getRow(1).font = { name: 'Calibri', size: 12, bold: true };
-
-    let grandTotalQty = 0;
-    let grandTotalAmount = 0;
-
-    for (const [, order] of ordersMap) {
-      const { user_name, items, hasReplied } = order;
-      let totalQty = 0;
-      let totalAmount = 0;
-      const startRow = sheet.lastRow.number + 1;
-
-      for (const item of items) {
-        const row = sheet.addRow([
-          user_name,
-          item.selling_id,
-          item.product_name,
-          item.quantity,
-          item.price,
-          item.subtotal,
-          item.replied ? '✔' : '✘',
-        ]);
-        row.font = { name: 'Calibri', size: 12 };
-
-        totalQty += item.quantity;
-        totalAmount += item.subtotal;
-      }
-
-      // 添加小计行（无空行）
-      const subtotalRow = sheet.addRow(['', '', '', totalQty, '', totalAmount, '']);
-      subtotalRow.font = { name: 'Calibri', size: 12 };
-
-      // 添加单线 + 双线框线（D~F栏）
-      const D = 4, F = 6;
-      for (let col = D; col <= F; col++) {
-        sheet.getCell(startRow, col).border = {
-          top: { style: 'thin' },
-        };
-        sheet.getCell(subtotalRow.number, col).border = {
-          bottom: { style: 'double' },
-        };
-      }
-
-      grandTotalQty += totalQty;
-      grandTotalAmount += totalAmount;
+        Number(price),
+        total,
+        replied ? '✔' : '✘',
+      ]).font = { name: 'Calibri', size: 12 };
     }
 
-    // 总计行
-    sheet.addRow(['✔ 总计:', '', '', grandTotalQty, '', grandTotalAmount, '']);
-    const lastRow = sheet.lastRow;
-    lastRow.font = { name: 'Calibri', size: 12, bold: true };
-
-    // 设置列宽
-    const widths = [20, 12, 30, 8, 10, 12, 12];
-    widths.forEach((w, i) => {
-      sheet.getColumn(i + 1).width = w;
+    // 小计行
+    const subtotalRow = sheet.addRow(['', '', '', subQty, '', subTotal, '']);
+    subtotalRow.font = { name: 'Calibri', size: 12 };
+    subtotalRow.eachCell((cell, colNumber) => {
+      if ([4, 6].includes(colNumber)) {
+        cell.border = { top: borderStyle };
+      }
     });
 
-    // 设置货币格式（E 与 F）
-    sheet.getColumn(5).numFmt = '#,##0.00';
-    sheet.getColumn(6).numFmt = '#,##0.00';
+    // 汇总统计
+    totalQty += subQty;
+    totalAmount += subTotal;
 
-    // 导出为文件
-    const buffer = await workbook.xlsx.writeBuffer();
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=bonsai-orders.xlsx');
-    res.send(buffer);
-  } catch (err) {
-    console.error('Export Error:', err);
-    res.status(500).json({ error: '生成 Excel 失败', detail: err.message });
+    // 空行分隔不同顾客
+    sheet.addRow([]);
   }
+
+  // 最终总计行
+  sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
+  const lastRow = sheet.lastRow;
+  lastRow.font = { name: 'Calibri', size: 12, bold: true };
+  lastRow.eachCell((cell, colNumber) => {
+    if ([4, 6].includes(colNumber)) {
+      cell.border = {
+        top: borderStyle,
+        bottom: borderStyle,
+      };
+    }
+  });
+
+  // 自动列宽
+  sheet.columns.forEach(col => {
+    let maxLength = 10;
+    col.eachCell(cell => {
+      const val = String(cell.value || '');
+      maxLength = Math.max(maxLength, val.length + 2);
+    });
+    col.width = maxLength;
+  });
+
+  // 导出 Excel
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=orders.xlsx');
+  await workbook.xlsx.write(res);
+  res.end();
 }
