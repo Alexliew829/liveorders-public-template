@@ -12,7 +12,6 @@ export default async function handler(req, res) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('订单');
 
-  // 设置标题栏样式
   const header = ['顾客名称', '商品编号', '商品名称', '数量', '价格', '总数', '已发送连接'];
   sheet.addRow(header);
   sheet.getRow(1).font = { name: 'Calibri', size: 12, bold: true };
@@ -30,10 +29,8 @@ export default async function handler(req, res) {
   let totalQty = 0;
   let totalAmount = 0;
 
-  const borderStyle = {
-    style: 'thin',
-    color: { argb: 'FF000000' },
-  };
+  const borderThin = { style: 'thin', color: { argb: 'FF000000' } };
+  const borderDouble = { style: 'double', color: { argb: 'FF000000' } };
 
   for (const [customer, orders] of Object.entries(grouped)) {
     let subQty = 0;
@@ -60,34 +57,33 @@ export default async function handler(req, res) {
     // 小计行
     const subtotalRow = sheet.addRow(['', '', '', subQty, '', subTotal, '']);
     subtotalRow.font = { name: 'Calibri', size: 12 };
-    subtotalRow.eachCell((cell, colNumber) => {
-      if ([4, 6].includes(colNumber)) {
-        cell.border = { top: borderStyle };
-      }
+
+    // 上方细线 + 下方双线（D、E、F）
+    [4, 5, 6].forEach(col => {
+      const cell = subtotalRow.getCell(col);
+      cell.border = {
+        top: borderThin,
+        bottom: borderDouble,
+      };
     });
 
-    // 汇总统计
     totalQty += subQty;
     totalAmount += subTotal;
 
-    // 空行分隔不同顾客
     sheet.addRow([]);
   }
 
-  // 最终总计行
-  sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
-  const lastRow = sheet.lastRow;
-  lastRow.font = { name: 'Calibri', size: 12, bold: true };
-  lastRow.eachCell((cell, colNumber) => {
-    if ([4, 6].includes(colNumber)) {
-      cell.border = {
-        top: borderStyle,
-        bottom: borderStyle,
-      };
-    }
+  // 总计行
+  const totalRow = sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
+  totalRow.font = { name: 'Calibri', size: 12, bold: true };
+  [4, 6].forEach(col => {
+    totalRow.getCell(col).border = {
+      top: borderThin,
+      bottom: borderThin,
+    };
   });
 
-  // 自动列宽
+  // 自动列宽，确保商品名称完整显示
   sheet.columns.forEach(col => {
     let maxLength = 10;
     col.eachCell(cell => {
@@ -97,7 +93,6 @@ export default async function handler(req, res) {
     col.width = maxLength;
   });
 
-  // 导出 Excel
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename=orders.xlsx');
   await workbook.xlsx.write(res);
