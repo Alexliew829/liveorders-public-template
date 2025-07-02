@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     snapshot.forEach((doc) => {
       const data = doc.data();
       const qty = Number(data.quantity) || 0;
-      const price = Number(
+      const price = parseFloat(
         typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price || 0
       );
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
         selling_id: data.selling_id || '',
         product_name: data.product_name || '',
         quantity: qty,
-        price: price,
+        price,
         total: qty * price,
         replied: data.replied ? '✅' : '❌',
       });
@@ -53,40 +53,34 @@ export default async function handler(req, res) {
 
     let totalQty = 0;
     let totalAmount = 0;
+
     let currentUser = '';
     let subTotalQty = 0;
     let subTotalAmount = 0;
 
-    for (let i = 0; i < allData.length; i++) {
-      const row = allData[i];
+    allData.forEach((row, index) => {
+      const isNewUser = row.user_name !== currentUser;
+      const isLastRow = index === allData.length - 1;
 
-      // ✅ 新顾客开始
-      if (row.user_name !== currentUser) {
-        if (currentUser !== '') {
-          // 插入小计行与空行
-          sheet.addRow({});
-          sheet.addRow({
-            user_name: '',
-            selling_id: '',
-            product_name: '',
-            quantity: subTotalQty,
-            price: '',
-            total: subTotalAmount.toFixed(2),
-            replied: '',
-          });
-          sheet.addRow({});
-        }
-
-        currentUser = row.user_name;
+      if (isNewUser && currentUser !== '') {
+        // 插入小计行
+        sheet.addRow({
+          user_name: '',
+          selling_id: '',
+          product_name: '',
+          quantity: subTotalQty,
+          price: '',
+          total: subTotalAmount.toFixed(2),
+          replied: '',
+        });
+        sheet.addRow({});
         subTotalQty = 0;
         subTotalAmount = 0;
       }
 
-      // ✅ 累加
-      totalQty += row.quantity;
-      totalAmount += row.total;
-      subTotalQty += row.quantity;
-      subTotalAmount += row.total;
+      if (isNewUser) {
+        currentUser = row.user_name;
+      }
 
       sheet.addRow({
         user_name: row.user_name,
@@ -97,23 +91,27 @@ export default async function handler(req, res) {
         total: row.total.toFixed(2),
         replied: row.replied,
       });
-    }
 
-    // ✅ 插入最后一个顾客小计
-    if (currentUser !== '') {
-      sheet.addRow({});
-      sheet.addRow({
-        user_name: '',
-        selling_id: '',
-        product_name: '',
-        quantity: subTotalQty,
-        price: '',
-        total: subTotalAmount.toFixed(2),
-        replied: '',
-      });
-    }
+      totalQty += row.quantity;
+      totalAmount += row.total;
+      subTotalQty += row.quantity;
+      subTotalAmount += row.total;
 
-    // ✅ 插入总计
+      if (isLastRow) {
+        // ✅ 最后一位顾客的小计
+        sheet.addRow({
+          user_name: '',
+          selling_id: '',
+          product_name: '',
+          quantity: subTotalQty,
+          price: '',
+          total: subTotalAmount.toFixed(2),
+          replied: '',
+        });
+      }
+    });
+
+    // ✅ 总计行
     sheet.addRow({});
     sheet.addRow({
       user_name: '✅ 总计：',
@@ -125,13 +123,12 @@ export default async function handler(req, res) {
 
     const buffer = await workbook.xlsx.writeBuffer();
 
-    // ✅ 生成文件名
+    // ✅ 文件名（日期）
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const year = String(now.getFullYear()).slice(2);
-    const today = `${day}-${month}-${year}`;
-    const filename = `${today} Bonsai-Order.xlsx`;
+    const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
