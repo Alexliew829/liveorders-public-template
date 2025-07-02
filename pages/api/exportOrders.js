@@ -15,78 +15,114 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '没有订单可导出' });
     }
 
-    // ✅ 按 user_name 分组
-    const orders = {};
+    const allData = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
-      const name = data.user_name || '匿名用户';
-      if (!orders[name]) orders[name] = [];
-      orders[name].push(data);
+      const qty = Number(data.quantity) || 0;
+      const price = Number(
+        typeof data.price === 'string' ? data.price.replace(/,/g, '') : data.price || 0
+      );
+
+      allData.push({
+        user_name: data.user_name || '',
+        selling_id: data.selling_id || '',
+        product_name: data.product_name || '',
+        quantity: qty,
+        price: price,
+        total: qty * price,
+        replied: data.replied ? '✅' : '❌',
+      });
     });
+
+    // ✅ 按顾客名称排序
+    allData.sort((a, b) => a.user_name.localeCompare(b.user_name));
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 设置表头
+    // ✅ 设置列标题
     sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
       { header: '商品名称', key: 'product_name', width: 30 },
       { header: '数量', key: 'quantity', width: 10 },
       { header: '价格', key: 'price', width: 15 },
-      { header: '总数', key: 'subtotal', width: 15 },
+      { header: '总数', key: 'total', width: 15 },
       { header: '已发送连接', key: 'replied', width: 15 },
     ];
 
-    let grandQty = 0;
-    let grandTotal = 0;
+    let totalQty = 0;
+    let totalAmount = 0;
+    let currentUser = '';
+    let subTotalQty = 0;
+    let subTotalAmount = 0;
 
-    for (const [user, items] of Object.entries(orders)) {
-      let userQty = 0;
-      let userTotal = 0;
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
 
-      for (const item of items) {
-        const qty = parseInt(item.quantity || 0);
-        const price = parseFloat((item.price || '0').toString().replace(/,/g, ''));
-        const subtotal = qty * price;
+      // ✅ 新顾客开始
+      if (row.user_name !== currentUser) {
+        if (currentUser !== '') {
+          // 插入小计行与空行
+          sheet.addRow({});
+          sheet.addRow({
+            user_name: '',
+            selling_id: '',
+            product_name: '',
+            quantity: subTotalQty,
+            price: '',
+            total: subTotalAmount.toFixed(2),
+            replied: '',
+          });
+          sheet.addRow({});
+        }
 
-        userQty += qty;
-        userTotal += subtotal;
-        grandQty += qty;
-        grandTotal += subtotal;
-
-        sheet.addRow({
-          user_name: item.user_name || '',
-          selling_id: item.selling_id || '',
-          product_name: item.product_name || '',
-          quantity: qty,
-          price: price.toFixed(2),
-          subtotal: subtotal.toFixed(2),
-          replied: item.replied ? '✅' : '❌',
-        });
+        currentUser = row.user_name;
+        subTotalQty = 0;
+        subTotalAmount = 0;
       }
 
-      // ✅ 顾客小计行
+      // ✅ 累加
+      totalQty += row.quantity;
+      totalAmount += row.total;
+      subTotalQty += row.quantity;
+      subTotalAmount += row.total;
+
+      sheet.addRow({
+        user_name: row.user_name,
+        selling_id: row.selling_id,
+        product_name: row.product_name,
+        quantity: row.quantity,
+        price: row.price.toFixed(2),
+        total: row.total.toFixed(2),
+        replied: row.replied,
+      });
+    }
+
+    // ✅ 插入最后一个顾客小计
+    if (currentUser !== '') {
+      sheet.addRow({});
       sheet.addRow({
         user_name: '',
         selling_id: '',
         product_name: '',
-        quantity: userQty,
-        subtotal: userTotal.toFixed(2),
+        quantity: subTotalQty,
+        price: '',
+        total: subTotalAmount.toFixed(2),
+        replied: '',
       });
-
-      // ✅ 插入空行作为分隔
-      sheet.addRow({});
     }
 
-    // ✅ 总计行
+    // ✅ 插入总计
+    sheet.addRow({});
     sheet.addRow({
       user_name: '✅ 总计：',
-      quantity: grandQty,
-      subtotal: grandTotal.toFixed(2),
+      quantity: totalQty,
+      price: '',
+      total: totalAmount.toFixed(2),
+      replied: '',
     });
 
-    // ✅ 生成 Buffer
     const buffer = await workbook.xlsx.writeBuffer();
 
     // ✅ 生成文件名
