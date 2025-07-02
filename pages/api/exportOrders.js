@@ -34,27 +34,25 @@ export default async function handler(req, res) {
       });
     });
 
+    // ✅ 按顾客名称排序
     allData.sort((a, b) => a.user_name.localeCompare(b.user_name));
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 设置列
+    // ✅ 设置列标题
     sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
       { header: '商品名称', key: 'product_name', width: 30 },
       { header: '数量', key: 'quantity', width: 10 },
-      { header: '价格', key: 'price', width: 15, style: { numFmt: '#,##0.00' } },
-      { header: '总数', key: 'total', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: '价格', key: 'price', width: 15 },
+      { header: '总数', key: 'total', width: 15 },
       { header: '已发送连接', key: 'replied', width: 15 },
     ];
 
-    // ✅ 设置默认字体为 12pt
-    sheet.properties.defaultRowHeight = 18;
-    sheet.eachRow(row => {
-      row.font = { size: 12 };
-    });
+    // ✅ 标题字体加粗、字体大小
+    sheet.getRow(1).font = { bold: true, size: 12 };
 
     let totalQty = 0;
     let totalAmount = 0;
@@ -65,33 +63,20 @@ export default async function handler(req, res) {
     for (let i = 0; i < allData.length; i++) {
       const row = allData[i];
 
+      // ✅ 新顾客开始
       if (row.user_name !== currentUser) {
         if (currentUser !== '') {
-          // ✅ 插入小计行并加上单/双线
-          const lineAbove = sheet.addRow({});
-          const subtotalRow = sheet.addRow({
-            user_name: '',
-            selling_id: '',
-            product_name: '',
+          // 插入小计行与空行
+          const subRow = sheet.addRow({
             quantity: subTotalQty,
-            price: '',
             total: subTotalAmount,
-            replied: '',
           });
-          const lineBelow = sheet.addRow({});
 
-          // 设置上单线
-          for (let col = 1; col <= 7; col++) {
-            lineAbove.getCell(col).border = {
-              top: { style: 'thin' },
-            };
-          }
-          // 设置下双线
-          for (let col = 1; col <= 7; col++) {
-            lineBelow.getCell(col).border = {
-              bottom: { style: 'double' },
-            };
-          }
+          subRow.font = { size: 12 };
+          subRow.getCell('quantity').border = { top: { style: 'thin' } };
+          subRow.getCell('total').border = { bottom: { style: 'double' } };
+
+          sheet.addRow({}); // 空行
         }
 
         currentUser = row.user_name;
@@ -113,41 +98,38 @@ export default async function handler(req, res) {
         total: row.total,
         replied: row.replied,
       });
+
+      // ✅ 每一行字体大小、价格格式化
       dataRow.font = { size: 12 };
+      dataRow.getCell('price').numFmt = '#,##0.00';
+      dataRow.getCell('total').numFmt = '#,##0.00';
     }
 
-    // ✅ 最后一位顾客小计
+    // ✅ 插入最后一个顾客的小计行
     if (currentUser !== '') {
-      const lineAbove = sheet.addRow({});
-      const subtotalRow = sheet.addRow({
-        user_name: '',
-        selling_id: '',
-        product_name: '',
+      const subRow = sheet.addRow({
         quantity: subTotalQty,
-        price: '',
         total: subTotalAmount,
-        replied: '',
       });
-      const lineBelow = sheet.addRow({});
-
-      for (let col = 1; col <= 7; col++) {
-        lineAbove.getCell(col).border = { top: { style: 'thin' } };
-        lineBelow.getCell(col).border = { bottom: { style: 'double' } };
-      }
+      subRow.font = { size: 12 };
+      subRow.getCell('quantity').border = { top: { style: 'thin' } };
+      subRow.getCell('total').border = { bottom: { style: 'double' } };
     }
 
-    // ✅ 总计行
+    // ✅ 插入总计
     sheet.addRow({});
-    sheet.addRow({
+    const totalRow = sheet.addRow({
       user_name: '✅ 总计：',
       quantity: totalQty,
-      price: '',
       total: totalAmount,
-      replied: '',
     });
+    totalRow.font = { size: 12, bold: true };
+    totalRow.getCell('quantity').numFmt = '#,##0';
+    totalRow.getCell('total').numFmt = '#,##0.00';
 
     const buffer = await workbook.xlsx.writeBuffer();
 
+    // ✅ 生成文件名
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
