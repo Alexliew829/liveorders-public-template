@@ -83,15 +83,22 @@ export default async function handler(req, res) {
     };
   });
 
-  // 自动列宽，确保商品名称完整显示
-  sheet.columns.forEach(col => {
-    let maxLength = 10;
-    col.eachCell(cell => {
-      const val = String(cell.value || '');
-      maxLength = Math.max(maxLength, val.length + 2);
-    });
-    col.width = maxLength;
+  // 自动列宽
+sheet.columns.forEach((col, index) => {
+  let maxLength = 10;
+  col.eachCell(cell => {
+    const val = String(cell.value || '');
+    maxLength = Math.max(maxLength, val.length + 2);
   });
+
+  // 如果是第7列（G栏），强制宽度至少为8
+  if (index === 6 && maxLength < 8) {
+    maxLength = 8;
+  }
+
+  col.width = maxLength;
+});
+
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename=orders.xlsx');
