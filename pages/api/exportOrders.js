@@ -54,11 +54,9 @@ export default async function handler(req, res) {
       ]).font = { name: 'Calibri', size: 12 };
     }
 
-    // 小计行
     const subtotalRow = sheet.addRow(['', '', '', subQty, '', subTotal, '']);
     subtotalRow.font = { name: 'Calibri', size: 12 };
 
-    // 上方细线 + 下方双线（D、E、F）
     [4, 5, 6].forEach(col => {
       const cell = subtotalRow.getCell(col);
       cell.border = {
@@ -73,7 +71,6 @@ export default async function handler(req, res) {
     sheet.addRow([]);
   }
 
-  // 总计行
   const totalRow = sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
   totalRow.font = { name: 'Calibri', size: 12, bold: true };
   [4, 6].forEach(col => {
@@ -83,22 +80,28 @@ export default async function handler(req, res) {
     };
   });
 
-  // 自动列宽
-sheet.columns.forEach((col, index) => {
-  let maxLength = 10;
-  col.eachCell(cell => {
-    const val = String(cell.value || '');
-    maxLength = Math.max(maxLength, val.length + 2);
+  // ✅ 自动列宽 + 指定固定宽度
+  sheet.columns.forEach((col, index) => {
+    let maxLength = 10;
+    col.eachCell(cell => {
+      const val = String(cell.value || '');
+      maxLength = Math.max(maxLength, val.length + 2);
+    });
+
+    if (index === 2) { // C栏 商品名称
+      maxLength = 21;
+    }
+
+    if (index === 6 && maxLength < 8) { // G栏 fallback
+      maxLength = 8;
+    }
+
+    if (index === 7) { // G栏（第8列）“已发送连接”
+      maxLength = 12;
+    }
+
+    col.width = maxLength;
   });
-
-  // 如果是第7列（G栏），强制宽度至少为8
-  if (index === 6 && maxLength < 8) {
-    maxLength = 8;
-  }
-
-  col.width = maxLength;
-});
-
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename=orders.xlsx');
