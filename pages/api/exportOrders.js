@@ -15,20 +15,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: '没有订单可导出' });
     }
 
-    const data = snapshot.docs.map(doc => doc.data());
-
     // ✅ 按 user_name 分组
-    const grouped = {};
-    for (const item of data) {
-      const name = item.user_name || '匿名用户';
-      if (!grouped[name]) grouped[name] = [];
-      grouped[name].push(item);
-    }
+    const orders = {};
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const name = data.user_name || '匿名用户';
+      if (!orders[name]) orders[name] = [];
+      orders[name].push(data);
+    });
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('订单');
 
-    // ✅ 设置列标题
+    // ✅ 设置表头
     sheet.columns = [
       { header: '顾客名称', key: 'user_name', width: 20 },
       { header: '商品编号', key: 'selling_id', width: 15 },
@@ -39,70 +38,64 @@ export default async function handler(req, res) {
       { header: '已发送连接', key: 'replied', width: 15 },
     ];
 
-    let totalQty = 0;
-    let totalAmount = 0;
+    let grandQty = 0;
+    let grandTotal = 0;
 
-    for (const [name, orders] of Object.entries(grouped)) {
-      let subQty = 0;
-      let subTotal = 0;
+    for (const [user, items] of Object.entries(orders)) {
+      let userQty = 0;
+      let userTotal = 0;
 
-      for (const item of orders) {
-        const qty = Number(item.quantity) || 0;
-        const price = Number(
-          typeof item.price === 'string' ? item.price.replace(/,/g, '') : item.price || 0
-        );
-        const amount = qty * price;
+      for (const item of items) {
+        const qty = parseInt(item.quantity || 0);
+        const price = parseFloat((item.price || '0').toString().replace(/,/g, ''));
+        const subtotal = qty * price;
 
-        subQty += qty;
-        subTotal += amount;
-        totalQty += qty;
-        totalAmount += amount;
+        userQty += qty;
+        userTotal += subtotal;
+        grandQty += qty;
+        grandTotal += subtotal;
 
         sheet.addRow({
-          user_name: name,
+          user_name: item.user_name || '',
           selling_id: item.selling_id || '',
           product_name: item.product_name || '',
           quantity: qty,
-          price: price.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
-          subtotal: amount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+          price: price.toFixed(2),
+          subtotal: subtotal.toFixed(2),
           replied: item.replied ? '✅' : '❌',
         });
       }
 
-      // ✅ 小计行
+      // ✅ 顾客小计行
       sheet.addRow({
         user_name: '',
         selling_id: '',
         product_name: '',
-        quantity: subQty,
-        price: '',
-        subtotal: subTotal.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
-        replied: '',
+        quantity: userQty,
+        subtotal: userTotal.toFixed(2),
       });
 
-      // ✅ 插入两行空白
-      sheet.addRow({});
+      // ✅ 插入空行作为分隔
       sheet.addRow({});
     }
 
-    // ✅ 最终总计行
+    // ✅ 总计行
     sheet.addRow({
       user_name: '✅ 总计：',
-      quantity: totalQty,
-      price: '',
-      subtotal: totalAmount.toLocaleString('en-MY', { minimumFractionDigits: 2 }),
+      quantity: grandQty,
+      subtotal: grandTotal.toFixed(2),
     });
 
+    // ✅ 生成 Buffer
     const buffer = await workbook.xlsx.writeBuffer();
 
-    // ✅ 文件名：02-07-25 Bonsai-Order.xlsx
+    // ✅ 生成文件名
     const now = new Date();
-    const [day, month, year] = [
-      String(now.getDate()).padStart(2, '0'),
-      String(now.getMonth() + 1).padStart(2, '0'),
-      String(now.getFullYear()).slice(2),
-    ];
-    const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = String(now.getFullYear()).slice(2);
+    const today = `${day}-${month}-${year}`;
+    const filename = `${today} Bonsai-Order.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
