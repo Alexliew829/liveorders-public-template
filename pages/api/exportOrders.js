@@ -1,133 +1,122 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import ExcelJS from 'exceljs';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
+
 const db = getFirestore();
 
 export default async function handler(req, res) {
-  try {
-    const snapshot = await db.collection('triggered_comments').get();
-    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('订单');
 
-    if (orders.length === 0) {
-      return res.status(404).send('没有订单资料');
+  // 设置标题栏
+  sheet.addRow([
+    '顾客名称', '商品编号', '商品名称', '数量', '价格', '总数', '已发送连接'
+  ]);
+  sheet.getRow(1).font = { bold: true };
+
+  // 获取订单数据
+  const snapshot = await db.collection('triggered_comments').orderBy('user_name').get();
+  const rows = [];
+  const customerGroups = new Map();
+
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    const key = data.user_name;
+
+    if (!customerGroups.has(key)) {
+      customerGroups.set(key, []);
     }
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('订单', {
-      properties: { defaultRowHeight: 20 },
-      pageSetup: { orientation: 'landscape' }
+    customerGroups.get(key).push({
+      name: data.user_name,
+      id: data.selling_id,
+      product_name: data.product_name,
+      quantity: data.quantity || 1,
+      price: data.price || 0,
+      sent: data.replied || false
     });
+  });
 
-    worksheet.columns = [
-      { header: '顾客名称', key: 'user_name', width: 22 },
-      { header: '商品编号', key: 'selling_id', width: 12 },
-      { header: '商品名称', key: 'product_name', width: 32 },
-      { header: '数量', key: 'qty', width: 10 },
-      { header: '价格', key: 'price', width: 12 },
-      { header: '总数', key: 'subtotal', width: 14 },
-      { header: '已发送连接', key: 'replied', width: 14 }
-    ];
+  let totalQuantity = 0;
+  let totalAmount = 0;
 
-    // 样式设定
-    worksheet.getRow(1).font = { bold: true, size: 12 };
-    worksheet.eachRow(row => {
-      row.alignment = { vertical: 'middle', horizontal: 'left' };
-      row.font = { name: 'Calibri', size: 12 };
-    });
+  for (const [name, orders] of customerGroups.entries()) {
+    let customerTotalQty = 0;
+    let customerTotalAmt = 0;
+    const startRow = sheet.rowCount + 1;
 
-    // 分组与汇总
-    const grouped = {};
     for (const order of orders) {
-      const { user_name, selling_id, product_name, price, qty, replied } = order;
-      const key = user_name || '匿名顾客';
-      if (!grouped[key]) grouped[key] = [];
+      const total = order.quantity * order.price;
+      sheet.addRow([
+        name,
+        order.id,
+        order.product_name,
+        order.quantity,
+        order.price,
+        total,
+        order.sent ? '✔️' : '❌'
+      ]);
 
-      grouped[key].push({
-        selling_id,
-        product_name,
-        price: Number(price),
-        qty: Number(qty),
-        subtotal: Number(price) * Number(qty),
-        replied: replied ? '✔' : '✘'
-      });
+      customerTotalQty += order.quantity;
+      customerTotalAmt += total;
+      totalQuantity += order.quantity;
+      totalAmount += total;
     }
 
-    let grandQty = 0;
-    let grandTotal = 0;
-    let rowIndex = 2;
+    const endRow = sheet.rowCount;
+    const borderStyle = { style: 'thin' };
 
-    for (const user in grouped) {
-      const userOrders = grouped[user];
-      let subtotalQty = 0;
-      let subtotalAmount = 0;
-
-      for (const item of userOrders) {
-        worksheet.addRow({
-          user_name: user,
-          selling_id: item.selling_id,
-          product_name: item.product_name,
-          qty: item.qty,
-          price: item.price,
-          subtotal: item.subtotal,
-          replied: item.replied
-        });
-        rowIndex++;
-        subtotalQty += item.qty;
-        subtotalAmount += item.subtotal;
-        grandQty += item.qty;
-        grandTotal += item.subtotal;
-      }
-
-      // 小计行（空白 + 小计数 + border）
-      worksheet.addRow({
-        qty: subtotalQty,
-        subtotal: subtotalAmount
-      });
-      worksheet.mergeCells(`A${rowIndex}:C${rowIndex}`);
-      const qtyCell = worksheet.getCell(`D${rowIndex}`);
-      const totalCell = worksheet.getCell(`F${rowIndex}`);
-      qtyCell.border = totalCell.border = {
-        top: { style: 'thin' }
+    // ✅ 单线加在顾客订单最后一行上方
+    if (orders.length > 1) {
+      sheet.getCell(`D${endRow}`).border = {
+        top: borderStyle
       };
-      rowIndex++;
+      sheet.getCell(`E${endRow}`).border = {
+        top: borderStyle
+      };
+      sheet.getCell(`F${endRow}`).border = {
+        top: borderStyle
+      };
     }
 
-    // 总计行
-    worksheet.addRow({
-      user_name: '✔ 总计：',
-      qty: grandQty,
-      subtotal: grandTotal
-    });
-    const totalRow = worksheet.lastRow;
-    totalRow.font = { bold: true, size: 12 };
-    worksheet.mergeCells(`A${totalRow.number}:C${totalRow.number}`);
+    // ✅ 双线加在顾客订单最后一行
+    sheet.getCell(`D${endRow + 1}`).value = customerTotalQty;
+    sheet.getCell(`E${endRow + 1}`).value = '';
+    sheet.getCell(`F${endRow + 1}`).value = customerTotalAmt;
 
-    const qtyCell = worksheet.getCell(`D${totalRow.number}`);
-    const totalCell = worksheet.getCell(`F${totalRow.number}`);
-    qtyCell.border = totalCell.border = {
-      bottom: { style: 'double' }
-    };
-
-    // 对齐数值类
-    for (let i = 2; i <= worksheet.rowCount; i++) {
-      worksheet.getCell(`D${i}`).alignment = { horizontal: 'right' };
-      worksheet.getCell(`E${i}`).alignment = { horizontal: 'right' };
-      worksheet.getCell(`F${i}`).alignment = { horizontal: 'right' };
-    }
-
-    // 设置 response
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="订单.xlsx"');
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    res.send(buffer);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('导出失败');
+    sheet.getCell(`D${endRow + 1}`).border = { top: borderStyle, bottom: { style: 'double' } };
+    sheet.getCell(`E${endRow + 1}`).border = { top: borderStyle, bottom: { style: 'double' } };
+    sheet.getCell(`F${endRow + 1}`).border = { top: borderStyle, bottom: { style: 'double' } };
   }
+
+  // ✅ 最底部总计
+  const finalRow = sheet.addRow([]);
+  sheet.addRow([
+    '✔️ 总计：', '', '', totalQuantity, '', totalAmount
+  ]);
+  const lastRow = sheet.lastRow;
+  lastRow.font = { bold: true };
+
+  // 设置列宽
+  const widths = [20, 10, 30, 8, 10, 12, 12];
+  widths.forEach((w, i) => {
+    sheet.getColumn(i + 1).width = w;
+  });
+
+  // 金额列格式
+  sheet.getColumn('E').numFmt = 'RM#,##0.00';
+  sheet.getColumn('F').numFmt = 'RM#,##0.00';
+
+  // ✅ 设置响应头并导出文件
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="订单.xlsx"');
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.end(buffer); // ✅ 用 end 替代 send，避免文件损坏
 }
