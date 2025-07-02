@@ -3,120 +3,146 @@ import { getFirestore } from 'firebase-admin/firestore';
 import ExcelJS from 'exceljs';
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-
 const db = getFirestore();
 
 export default async function handler(req, res) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('订单');
 
-  // 设置标题栏
+  // 表头
   sheet.addRow([
-    '顾客名称', '商品编号', '商品名称', '数量', '价格', '总数', '已发送连接'
+    '顾客名称',
+    '商品编号',
+    '商品名称',
+    '数量',
+    '价格',
+    '总数',
+    '已发送连接',
   ]);
-  sheet.getRow(1).font = { bold: true };
 
-  // 获取订单数据
-  const snapshot = await db.collection('triggered_comments').orderBy('user_name').get();
+  // 读取数据
+  const snapshot = await db.collection('triggered_comments').get();
   const rows = [];
-  const customerGroups = new Map();
-
   snapshot.forEach(doc => {
     const data = doc.data();
-    const key = data.user_name;
-
-    if (!customerGroups.has(key)) {
-      customerGroups.set(key, []);
-    }
-
-    customerGroups.get(key).push({
+    if (!data.user_name || !data.selling_id || !data.product_name) return;
+    const price = parseFloat(data.price || 0);
+    const quantity = parseInt(data.quantity || 1);
+    rows.push({
       name: data.user_name,
       id: data.selling_id,
-      product_name: data.product_name,
-      quantity: data.quantity || 1,
-      price: data.price || 0,
-      sent: data.replied || false
+      product: data.product_name,
+      quantity,
+      price,
+      total: price * quantity,
+      replied: data.replied ? '✓' : '✗',
     });
   });
 
-  let totalQuantity = 0;
-  let totalAmount = 0;
-
-  for (const [name, orders] of customerGroups.entries()) {
-    let customerTotalQty = 0;
-    let customerTotalAmt = 0;
-    const startRow = sheet.rowCount + 1;
-
-    for (const order of orders) {
-      const total = order.quantity * order.price;
-      sheet.addRow([
-        name,
-        order.id,
-        order.product_name,
-        order.quantity,
-        order.price,
-        total,
-        order.sent ? '✔️' : '❌'
-      ]);
-
-      customerTotalQty += order.quantity;
-      customerTotalAmt += total;
-      totalQuantity += order.quantity;
-      totalAmount += total;
-    }
-
-    const endRow = sheet.rowCount;
-    const borderStyle = { style: 'thin' };
-
-    // ✅ 单线加在顾客订单最后一行上方
-    if (orders.length > 1) {
-      sheet.getCell(`D${endRow}`).border = {
-        top: borderStyle
-      };
-      sheet.getCell(`E${endRow}`).border = {
-        top: borderStyle
-      };
-      sheet.getCell(`F${endRow}`).border = {
-        top: borderStyle
-      };
-    }
-
-    // ✅ 双线加在顾客订单最后一行
-    sheet.getCell(`D${endRow + 1}`).value = customerTotalQty;
-    sheet.getCell(`E${endRow + 1}`).value = '';
-    sheet.getCell(`F${endRow + 1}`).value = customerTotalAmt;
-
-    sheet.getCell(`D${endRow + 1}`).border = { top: borderStyle, bottom: { style: 'double' } };
-    sheet.getCell(`E${endRow + 1}`).border = { top: borderStyle, bottom: { style: 'double' } };
-    sheet.getCell(`F${endRow + 1}`).border = { top: borderStyle, bottom: { style: 'double' } };
-  }
-
-  // ✅ 最底部总计
-  const finalRow = sheet.addRow([]);
-  sheet.addRow([
-    '✔️ 总计：', '', '', totalQuantity, '', totalAmount
-  ]);
-  const lastRow = sheet.lastRow;
-  lastRow.font = { bold: true };
-
-  // 设置列宽
-  const widths = [20, 10, 30, 8, 10, 12, 12];
-  widths.forEach((w, i) => {
-    sheet.getColumn(i + 1).width = w;
+  // 排序：顾客 + 商品编号
+  rows.sort((a, b) => {
+    if (a.name === b.name) return a.id.localeCompare(b.id);
+    return a.name.localeCompare(b.name);
   });
 
-  // 金额列格式
-  sheet.getColumn('E').numFmt = 'RM#,##0.00';
-  sheet.getColumn('F').numFmt = 'RM#,##0.00';
+  let current = '';
+  let subtotalQty = 0;
+  let subtotalAmt = 0;
+  let totalQty = 0;
+  let totalAmt = 0;
 
-  // ✅ 设置响应头并导出文件
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="订单.xlsx"');
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
 
+    // 如果是新顾客，插入空行
+    if (r.name !== current && current !== '') {
+      // 小计行上面加单线，下方加双线
+      const lastRow = sheet.lastRow;
+      lastRow.getCell(4).border = { top: { style: 'thin' } };
+      const subtotalRow = sheet.addRow([
+        '',
+        '',
+        '',
+        subtotalQty,
+        '',
+        subtotalAmt,
+        '',
+      ]);
+      subtotalRow.getCell(4).border = { bottom: { style: 'double' } };
+      subtotalRow.getCell(6).border = { bottom: { style: 'double' } };
+      subtotalQty = 0;
+      subtotalAmt = 0;
+      sheet.addRow([]); // 顾客间空行
+    }
+
+    current = r.name;
+    subtotalQty += r.quantity;
+    subtotalAmt += r.total;
+    totalQty += r.quantity;
+    totalAmt += r.total;
+
+    sheet.addRow([
+      r.name,
+      r.id,
+      r.product,
+      r.quantity,
+      r.price,
+      r.total,
+      r.replied,
+    ]);
+  }
+
+  // 最后一组顾客的小计
+  const lastRow = sheet.lastRow;
+  lastRow.getCell(4).border = { top: { style: 'thin' } };
+  const subtotalRow = sheet.addRow([
+    '',
+    '',
+    '',
+    subtotalQty,
+    '',
+    subtotalAmt,
+    '',
+  ]);
+  subtotalRow.getCell(4).border = { bottom: { style: 'double' } };
+  subtotalRow.getCell(6).border = { bottom: { style: 'double' } };
+
+  sheet.addRow([]); // 空行
+
+  // 总计
+  const totalRow = sheet.addRow([
+    '✓ 总计:',
+    '',
+    '',
+    totalQty,
+    '',
+    totalAmt,
+    '',
+  ]);
+  totalRow.font = { bold: true };
+
+  // 自动列宽
+  sheet.columns.forEach(col => {
+    let maxLen = 10;
+    col.eachCell(c => {
+      const val = c.value?.toString() || '';
+      maxLen = Math.max(maxLen, val.length + 2);
+    });
+    col.width = maxLen;
+  });
+
+  // 导出
   const buffer = await workbook.xlsx.writeBuffer();
-  res.end(buffer); // ✅ 用 end 替代 send，避免文件损坏
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader(
+    'Content-Disposition',
+    'attachment; filename="订单.xlsx"'
+  );
+  res.end(buffer);
 }
