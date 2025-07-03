@@ -68,7 +68,10 @@ export default async function handler(req, res) {
         '付款方式：',
         'Lover Legend Adenium',
         'Maybank：512389673060',
-        'Public Bank：3214928526'
+        'Public Bank：3214928526',
+        '',
+        'TNG 付款连接：',
+        'https://liveorders-public-template.vercel.app/TNG.jpg'
       ];
 
       if (method === 'messenger') {
