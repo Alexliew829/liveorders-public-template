@@ -76,9 +76,7 @@ export default async function handler(req, res) {
         `Public Bank：3214928526`,
         '',
         `TNG 付款连接：`,
-        `https://liveorders-public-template.vercel.app/TNG.jpg`,
-        '',
-        `📸 付款后请截图发到后台：https://m.me/lover.legend.gardening`
+        `https://liveorders-public-template.vercel.app/TNG.jpg`
       ].join('\n');
 
       return {
