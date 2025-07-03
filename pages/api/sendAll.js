@@ -11,110 +11,71 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const method = req.query.method || 'comment';
+  const { comment_id, channel = 'comment' } =
+    req.method === 'POST' ? req.body : req.query;
+
+  if (!comment_id) {
+    return res.status(400).json({ error: '缺少 comment_id 参数' });
+  }
 
   try {
-    const orderSnap = await db
+    // 查找该顾客的订单留言
+    const querySnap = await db
       .collection('triggered_comments')
-      .where('replied', '!=', true)
+      .where('comment_id', '==', comment_id)
+      .limit(1)
       .get();
 
-    if (orderSnap.empty) {
-      return res.status(200).json({ message: '没有待发订单' });
+    if (querySnap.empty) {
+      return res.status(404).json({ error: '找不到该留言记录' });
     }
 
-    let successCount = 0;
-    let failCount = 0;
-    let errors = [];
+    const commentSnap = querySnap.docs[0];
+    const { user_name, user_id } = commentSnap.data();
+
+    // 查找此顾客的所有订单
+    const orderSnap = await db
+      .collection('triggered_comments')
+      .where('user_id', '==', user_id)
+      .get();
+
+    let total = 0;
 
     for (const doc of orderSnap.docs) {
-      const { comment_id, user_id, user_name } = doc.data();
+      const { selling_id, quantity } = doc.data();
+      const productDoc = await db.collection('live_products').doc(selling_id).get();
+      if (!productDoc.exists) continue;
 
-      // 为确保每位顾客只处理一次
-      const alreadySent = await db
-        .collection('triggered_comments')
-        .where('user_id', '==', user_id)
-        .where('replied', '==', true)
-        .limit(1)
-        .get();
-
-      if (!comment_id || alreadySent.size > 0) continue;
-
-      const orderItemsSnap = await db
-        .collection('triggered_comments')
-        .where('user_id', '==', user_id)
-        .get();
-
-      let total = 0;
-      let productLines = [];
-
-      for (const orderDoc of orderItemsSnap.docs) {
-        const { selling_id, product_name, quantity } = orderDoc.data();
-        const productDoc = await db.collection('live_products').doc(selling_id).get();
-        const productData = productDoc.exists ? productDoc.data() : null;
-        if (!productData) continue;
-
-        const rawPrice = typeof productData.price === 'string'
-          ? productData.price.replace(/,/g, '')
-          : productData.price;
-        const price = parseFloat(rawPrice || 0);
-        const qty = parseInt(quantity) || 1;
-        const subtotal = +(price * qty).toFixed(2);
-        total = +(total + subtotal).toFixed(2);
-
-        productLines.push(`▪️ ${selling_id} ${product_name} x${qty} = RM${subtotal.toFixed(2)}`);
-      }
-
-      const totalStr = `总金额：RM${total.toFixed(2)}`;
-      const sgd = (total / 3.25).toFixed(2);
-      const sgdStr = `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`;
-
-      const paymentMessage = [
-        `感谢下单 ${user_name || '顾客'} 🙏`,
-        ...productLines,
-        '',
-        totalStr,
-        sgdStr,
-        '',
-        '付款方式：',
-        'Lover Legend Adenium',
-        'Maybank：512389673060',
-        'Public Bank：3214928526',
-        '',
-        'TNG 付款连接：',
-        'https://liveorders-public-template.vercel.app/TNG.jpg'
-      ];
-
-      if (method === 'messenger') {
-        paymentMessage.push('', '已将付款详情发到 Messenger，请查阅 Inbox 📥');
-      }
-
-      const message = paymentMessage.join('\n');
-
-      const url = `https://graph.facebook.com/${comment_id}/comments`;
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          access_token: PAGE_TOKEN
-        })
-      });
-
-      const fbRes = await r.json();
-      if (r.ok) {
-        await doc.ref.update({ replied: true });
-        successCount++;
-      } else {
-        failCount++;
-        errors.push({ comment_id, fbRes });
-      }
+      const { price } = productDoc.data();
+      const unitPrice = parseFloat(typeof price === 'string' ? price.replace(/,/g, '') : price);
+      const qty = parseInt(quantity) || 1;
+      const subtotal = +(unitPrice * qty).toFixed(2);
+      total += subtotal;
     }
 
-    return res.status(200).json({
-      message: `成功发送 ${successCount} 位顾客，失败 ${failCount} 位`,
-      errors
+    total = +total.toFixed(2);
+
+    // 发送留言：只显示通知（不再公开订单详情）
+    const notifyMessage = `感谢 ${user_name || '顾客'}，你的订单详情已经发送到 Inbox 👉 https://m.me/lover.legend.gardening，请查阅 📥`;
+
+    const url = `https://graph.facebook.com/${comment_id}/comments`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: notifyMessage,
+        access_token: PAGE_TOKEN
+      })
     });
+
+    const fbRes = await r.json();
+    if (!r.ok) {
+      return res.status(500).json({ error: '发送失败', fbRes });
+    }
+
+    await commentSnap.ref.update({ replied: true });
+
+    return res.status(200).json({ success: true, total: total.toFixed(2), fbRes });
   } catch (err) {
     return res.status(500).json({ error: '系统错误', message: err.message });
   }
