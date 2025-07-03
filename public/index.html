@@ -54,8 +54,13 @@
       font-size: 17px;
       display: block;
     }
-    .send-type {
-      margin: 6px 0;
+    .message-box {
+      background: #f0f0f0;
+      border: 1px dashed #bbb;
+      padding: 12px;
+      white-space: pre-wrap;
+      margin-top: 10px;
+      border-radius: 8px;
     }
   </style>
 </head>
@@ -100,8 +105,6 @@
       }
     };
 
-    window.sendMethod = 'messenger'; // 默认只支持 Messenger
-
     window.showPendingOrders = async function () {
       try {
         const res = await fetch('/api/pendingOrders');
@@ -117,84 +120,27 @@
 
         for (const order of data) {
           const user = order.user_name || '匿名顾客';
-          const items = order.items || [];
-          let total = 0;
+          const message = order.message || '';
+          grandTotal += order.total || 0;
 
           html += `<strong>${user}</strong>`;
-
-          for (const item of items) {
-            const qty = item.quantity || 1;
-            const price = parseFloat(item.price) || 0;
-            const sub = qty * price;
-            total += sub;
-            html += `<div>▪️ ${item.selling_id || ''} ${item.product_name || ''} ${price.toFixed(2)} x ${qty} = RM${sub.toFixed(2)}</div>`;
-          }
-
-          grandTotal += total;
-
-          const sgd = (total / 3.25).toFixed(2);
-          const sentText = order.replied ? ' ✅' : '';
-          html += `<br><div><strong>总金额：RM${total.toFixed(2)}${sentText}</strong></div>`;
-          html += `<div style="color: #444">SGD${sgd} PayLah! / PayNow me @87158951 (Siang)</div>`;
-
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="confirmSend('${order.comment_id}', '${user}', ${order.replied})">发送付款连接</button><hr>`;
+          html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
+          html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button><hr>`;
         }
 
         html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br><br>`;
-        html += `<button class="action-button" onclick="massSend()">群发付款链接</button>`;
         box.innerHTML = html;
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
     };
 
-    window.confirmSend = async function (commentId, user, alreadySent) {
-      if (alreadySent) {
-        const sure = confirm(`⚠️ 此客户已发送过付款连接，确认要重新发送给 ${user} 吗？`);
-        if (!sure) return;
-      }
-      await sendPayment(commentId, user);
-    };
-
-    window.sendPayment = async function (commentId, user) {
-      if (!commentId) {
-        alert(`无法取得 ${user} 的留言 ID，无法发送付款连接`);
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/manualSend', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ comment_id: commentId, channel: 'messenger' })
-        });
-
-        const result = await res.json();
-        if (res.ok) {
-          alert(`✅ 已成功发送付款连接给 ${user}`);
-          await fetch('/api/commentNotice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ comment_id: commentId, message: `感谢${user}, 你的订单详情已经发送到Inbox https://m.me/lover.legend.gardening，请查阅` })
-          });
-          showPendingOrders();
-        } else {
-          alert(`发送失败：${result.error || JSON.stringify(result)}`);
-        }
-      } catch (err) {
-        alert('无法连接服务器：' + err.message);
-      }
-    };
-
-    window.massSend = async function () {
-      try {
-        const res = await fetch(`/api/sendAll?method=messenger`);
-        const result = await res.json();
-        alert(result.message || '群发完成');
-        showPendingOrders();
-      } catch (err) {
-        alert('群发失败：' + err.message);
-      }
+    window.copyMessage = function(btn) {
+      const messageBox = btn.previousElementSibling;
+      const text = messageBox.innerText || messageBox.textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('已复制订单详情，可粘贴到 Messenger 私信顾客');
+      });
     };
   </script>
 </body>
