@@ -29,6 +29,17 @@ export default async function handler(req, res) {
 
     for (const doc of orderSnap.docs) {
       const { comment_id, user_id, user_name } = doc.data();
+
+      // 为确保每位顾客只处理一次
+      const alreadySent = await db
+        .collection('triggered_comments')
+        .where('user_id', '==', user_id)
+        .where('replied', '==', true)
+        .limit(1)
+        .get();
+
+      if (!comment_id || alreadySent.size > 0) continue;
+
       const orderItemsSnap = await db
         .collection('triggered_comments')
         .where('user_id', '==', user_id)
