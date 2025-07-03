@@ -1,3 +1,4 @@
+<!-- 保持格式与样式，移除TNG链接，仅显示二维码 -->
 <!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -65,6 +66,14 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .qr {
+      margin-top: 8px;
+      text-align: center;
+    }
+    .qr img {
+      width: 160px;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -121,7 +130,6 @@
         }
 
         let html = '';
-        const tngLink = 'https://payment.tngdigital.com.my/sc/dRacq2iFOb';
         let grandTotal = 0;
 
         for (const order of data) {
@@ -150,9 +158,11 @@
 Lover Legend Adenium
 Maybank：512389673060
 Public Bank：3214928526
-TNG 电子钱包付款链接：
-${tngLink}
-</pre>`;
+TNG 电子钱包付款条码：
+</pre>
+<div class="qr">
+  <img src="/TNG.jpg" alt="TNG QR Code" />
+</div>`;
 
           html += `<button class="action-button" onclick="confirmSend('${order.comment_id}', '${user}', ${order.replied})">发送付款连接</button><hr>`;
         }
