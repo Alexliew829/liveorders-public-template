@@ -61,6 +61,10 @@ export default async function handler(req, res) {
     }
 
     const result = Array.from(map.values());
+
+    // ✅ 按顾客名字排序
+    result.sort((a, b) => a.user_name.localeCompare(b.user_name));
+
     res.status(200).json(result); // ✅ 返回 JSON 格式
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
