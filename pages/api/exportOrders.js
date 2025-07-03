@@ -39,23 +39,28 @@ export default async function handler(req, res) {
 
     for (const order of orders) {
       const { selling_id, product_name, price, replied, quantity = 1 } = order;
-      const total = Number(price) * Number(quantity);
+      const priceNum = Number(price);
+      const total = priceNum * Number(quantity);
       subQty += Number(quantity);
       subTotal += total;
 
-      sheet.addRow([
+      const row = sheet.addRow([
         customer,
         selling_id,
         product_name,
         quantity,
-        Number(price),
+        priceNum,
         total,
         replied ? '✔' : '✘',
-      ]).font = { name: 'Calibri', size: 12 };
+      ]);
+      row.font = { name: 'Calibri', size: 12 };
+      row.getCell(5).numFmt = '"RM"#,##0.00'; // 价格
+      row.getCell(6).numFmt = '"RM"#,##0.00'; // 总数
     }
 
     const subtotalRow = sheet.addRow(['', '', '', subQty, '', subTotal, '']);
     subtotalRow.font = { name: 'Calibri', size: 12 };
+    subtotalRow.getCell(6).numFmt = '"RM"#,##0.00';
 
     [4, 5, 6].forEach(col => {
       const cell = subtotalRow.getCell(col);
@@ -73,6 +78,7 @@ export default async function handler(req, res) {
 
   const totalRow = sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
   totalRow.font = { name: 'Calibri', size: 12, bold: true };
+  totalRow.getCell(6).numFmt = '"RM"#,##0.00';
   [4, 6].forEach(col => {
     totalRow.getCell(col).border = {
       top: borderThin,
