@@ -11,6 +11,8 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
+  const method = req.query.method || 'comment';
+
   try {
     const orderSnap = await db
       .collection('triggered_comments')
@@ -67,14 +69,20 @@ export default async function handler(req, res) {
         'Lover Legend Adenium',
         'Maybank：512389673060',
         'Public Bank：3214928526'
-      ].join('\n');
+      ];
+
+      if (method === 'messenger') {
+        paymentMessage.push('', '已将付款详情发到 Messenger，请查阅 Inbox 📥');
+      }
+
+      const message = paymentMessage.join('\n');
 
       const url = `https://graph.facebook.com/${comment_id}/comments`;
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: paymentMessage,
+          message,
           access_token: PAGE_TOKEN
         })
       });
