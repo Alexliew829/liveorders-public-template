@@ -11,7 +11,7 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const { comment_id, method = 'comment' } =
+  const { comment_id, channel = 'comment' } =
     req.method === 'POST' ? req.body : req.query;
 
   if (!comment_id) {
@@ -19,6 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 查找该顾客的订单留言
     const querySnap = await db
       .collection('triggered_comments')
       .where('comment_id', '==', comment_id)
@@ -32,6 +33,7 @@ export default async function handler(req, res) {
     const commentSnap = querySnap.docs[0];
     const { user_name, user_id } = commentSnap.data();
 
+    // 查找此顾客的所有订单
     const orderSnap = await db
       .collection('triggered_comments')
       .where('user_id', '==', user_id)
@@ -43,28 +45,21 @@ export default async function handler(req, res) {
     for (const doc of orderSnap.docs) {
       const { selling_id, product_name, quantity } = doc.data();
 
-      const productDoc = await db
-        .collection('live_products')
-        .doc(selling_id)
-        .get();
-      const productData = productDoc.exists ? productDoc.data() : null;
-      if (!productData) continue;
+      const productDoc = await db.collection('live_products').doc(selling_id).get();
+      if (!productDoc.exists) continue;
 
-      const rawPrice = typeof productData.price === 'string'
-        ? productData.price.replace(/,/g, '')
-        : productData.price;
-      const price = parseFloat(rawPrice || 0);
-
+      const { price } = productDoc.data();
+      const unitPrice = parseFloat(typeof price === 'string' ? price.replace(/,/g, '') : price);
       const qty = parseInt(quantity) || 1;
-      const subtotal = +(price * qty).toFixed(2);
-      total = +(total + subtotal).toFixed(2);
+      const subtotal = +(unitPrice * qty).toFixed(2);
+      total += subtotal;
 
       productLines.push(`▪️ ${selling_id} ${product_name} x${qty} = RM${subtotal.toFixed(2)}`);
     }
 
+    total = +total.toFixed(2);
     const totalStr = `总金额：RM${total.toFixed(2)}`;
-    const sgd = (total / 3.25).toFixed(2);
-    const sgdStr = `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`;
+    const sgdStr = `SGD${(total / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)`;
 
     const paymentMessage = [
       `感谢下单 ${user_name || '顾客'} 🙏`,
@@ -77,21 +72,22 @@ export default async function handler(req, res) {
       'Lover Legend Adenium',
       'Maybank：512389673060',
       'Public Bank：3214928526',
-      'TNG 付款连接：https://liveorders-public-template.vercel.app/TNG.jpg'
+      '',
+      'TNG 付款连接：',
+      'https://liveorders-public-template.vercel.app/TNG.jpg'
     ];
 
-    if (method === 'messenger') {
-      paymentMessage.push('', '已将付款详情发到 Messenger，请查阅 Inbox 📥');
-    }
-
-    const message = paymentMessage.join('\n');
+    // Messenger 模式：留言通知顾客去 Inbox 查阅
+    const finalMessage = channel === 'messenger'
+      ? `感谢 ${user_name || '顾客'}，你的订单详情已经发送到 Inbox 👉 https://m.me/lover.legend.gardening，请查阅 📥`
+      : paymentMessage.join('\n');
 
     const url = `https://graph.facebook.com/${comment_id}/comments`;
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message,
+        message: finalMessage,
         access_token: PAGE_TOKEN
       })
     });
