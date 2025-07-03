@@ -7,6 +7,15 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 
+function formatMoney(n) {
+  return n.toLocaleString('en-MY', {
+    style: 'currency',
+    currency: 'MYR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).replace('MYR', 'RM').replace(/\u00A0/g, '');
+}
+
 export default async function handler(req, res) {
   try {
     const snapshot = await db
@@ -18,14 +27,12 @@ export default async function handler(req, res) {
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
-
       if (data.replied === true) continue;
 
       const user_id = data.user_id || 'anonymous';
       const user_name = data.user_name || '匿名顾客';
       const key = user_id;
 
-      // ✅ 重新从 live_products 获取价格
       const productDoc = await db.collection('live_products').doc(data.selling_id).get();
       if (!productDoc.exists) continue;
       const product = productDoc.data();
@@ -59,7 +66,35 @@ export default async function handler(req, res) {
     }
 
     const result = Array.from(map.values());
-    res.status(200).json(result);
+
+    // ✅ 拼接文字格式（新版格式）
+    const textBlocks = [];
+    let grandTotal = 0;
+
+    for (const order of result) {
+      const lines = [];
+      lines.push(`🧾 ${order.user_name}`);
+
+      for (const item of order.items) {
+        const id = item.selling_id;
+        const name = item.product_name;
+        const qty = item.quantity;
+        const unit = item.price.toFixed(2);
+        const total = formatMoney(item.subtotal);
+        lines.push(`▪️ ${id} ${name} ${unit} x ${qty} = ${total}`);
+      }
+
+      lines.push(`💰 小计：${formatMoney(order.total)}`);
+      textBlocks.push(lines.join('\n'));
+
+      grandTotal += order.total;
+    }
+
+    if (textBlocks.length > 0) {
+      textBlocks.push(`\n🔸 总销售额：${formatMoney(grandTotal)}`);
+    }
+
+    res.status(200).send(textBlocks.join('\n\n'));
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
   }
