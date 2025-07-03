@@ -61,29 +61,7 @@ export default async function handler(req, res) {
     }
 
     const result = Array.from(map.values());
-
-    // ✅ 格式化显示内容（纯文本）
-    const textBlocks = [];
-    let grandTotal = 0;
-
-    for (const user of result) {
-      textBlocks.push(`🧾 ${user.user_name}`);
-
-      for (const item of user.items) {
-        const line = `▪️ ${item.selling_id} ${item.product_name} ${item.price.toFixed(2)} x ${item.quantity} = RM${item.subtotal.toFixed(2)}`;
-        textBlocks.push(line);
-      }
-
-      textBlocks.push(`总金额：RM${user.total.toFixed(2)}\n`);
-      grandTotal += user.total;
-    }
-
-    if (textBlocks.length > 0) {
-      textBlocks.push(`🔸 总销售额：RM${grandTotal.toFixed(2)}`);
-    }
-
-    res.setHeader('Content-Type', 'text/plain'); // ✅ 返回纯文本，避免 JSON 错误
-    res.status(200).send(textBlocks.join('\n\n'));
+    res.status(200).json(result); // ✅ 返回 JSON 格式
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
   }
