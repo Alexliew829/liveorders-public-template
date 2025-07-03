@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     const sgdStr = `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`;
 
     const paymentMessage = [
-      `感谢你的支持 🙏`,
+      `感谢你的支持 🙏，订单详情`,
       ...productLines,
       '',
       totalStr,
