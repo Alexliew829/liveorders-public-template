@@ -40,9 +40,10 @@ export default async function handler(req, res) {
       .get();
 
     let total = 0;
+    let productLines = [];
 
     for (const doc of orderSnap.docs) {
-      const { selling_id, quantity } = doc.data();
+      const { selling_id, product_name, quantity } = doc.data();
       const productDoc = await db.collection('live_products').doc(selling_id).get();
       if (!productDoc.exists) continue;
 
@@ -51,15 +52,46 @@ export default async function handler(req, res) {
       const qty = parseInt(quantity) || 1;
       const subtotal = +(unitPrice * qty).toFixed(2);
       total += subtotal;
+
+      productLines.push(`▪️ ${selling_id} ${product_name} x${qty} = RM${subtotal.toFixed(2)}`);
     }
 
     total = +total.toFixed(2);
+    const totalStr = `总金额：RM${total.toFixed(2)}`;
+    const sgdStr = `SGD${(total / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)`;
 
-    // 发送留言：只显示通知（不再公开订单详情）
-    const notifyMessage = `感谢 ${user_name || '顾客'}，你的订单详情已经发送到 Inbox 👉 https://m.me/lover.legend.gardening，请查阅 📥`;
+    const paymentMessage = [
+      `感谢下单 🙏`,
+      ...productLines,
+      '',
+      totalStr,
+      sgdStr,
+      '',
+      '付款方式：',
+      'Lover Legend Adenium',
+      'Maybank：512389673060',
+      'Public Bank：3214928526',
+      'TNG 付款连接：https://liveorders-public-template.vercel.app/TNG.jpg'
+    ].join('\n');
 
-    const url = `https://graph.facebook.com/${comment_id}/comments`;
-    const r = await fetch(url, {
+    // ✅ Step 1: 发送 Messenger 私讯（订单内容）
+    const messengerRes = await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: user_id },
+        message: { text: paymentMessage },
+        messaging_type: 'MESSAGE_TAG',
+        tag: 'POST_PURCHASE_UPDATE'
+      })
+    });
+
+    const messengerJson = await messengerRes.json();
+
+    // ✅ Step 2: 留言提醒顾客查看 Messenger（不含名字）
+    const notifyMessage = `感谢你的支持，订单详情已经发送到 Inbox 👉 https://m.me/lover.legend.gardening，请查阅 📥`;
+
+    const commentRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -68,14 +100,22 @@ export default async function handler(req, res) {
       })
     });
 
-    const fbRes = await r.json();
-    if (!r.ok) {
-      return res.status(500).json({ error: '发送失败', fbRes });
+    const fbRes = await commentRes.json();
+
+    // ✅ 判断两个发送结果
+    if (!messengerRes.ok && !commentRes.ok) {
+      return res.status(500).json({ error: '发送失败：Messenger 与 留言均失败', messengerJson, fbRes });
+    }
+    if (!messengerRes.ok) {
+      return res.status(500).json({ error: '发送失败：发送 Messenger 私讯失败', messengerJson });
+    }
+    if (!commentRes.ok) {
+      return res.status(500).json({ error: '发送失败：留言通知失败', fbRes });
     }
 
     await commentSnap.ref.update({ replied: true });
 
-    return res.status(200).json({ success: true, total: total.toFixed(2), fbRes });
+    return res.status(200).json({ success: true, total: total.toFixed(2) });
   } catch (err) {
     return res.status(500).json({ error: '系统错误', message: err.message });
   }
