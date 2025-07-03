@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
     const result = Array.from(map.values()).map(order => {
       const itemLines = order.items.map(
-        item => `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`
+        item => `▪️ ${item.selling_id} ${item.product_name} ${item.quantity}x${item.price.toFixed(2)} = RM${item.subtotal.toFixed(2)}`
       );
 
       const sgd = (order.total / 3.25).toFixed(2);
