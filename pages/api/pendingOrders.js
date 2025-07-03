@@ -47,6 +47,7 @@ export default async function handler(req, res) {
           user_name,
           comment_id: data.comment_id || '',
           replied: data.replied || false,
+          replied_public: data.replied_public || false, // ✅ 新增字段
           items: [item],
           total: subtotal
         });
