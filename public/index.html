@@ -72,9 +72,9 @@
   <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
 
   <div class="button-container">
-    <button class="action-button" onclick="call('/api/startOrderListener', true)">🪴 记录商品资料</button>
-    <button class="action-button" onclick="showPendingOrders()">📋 显示待发订单</button>
-    <button class="action-button" onclick="call('/api/exportOrders')">📤 导出订单 Excel</button>
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
+    <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
 
   <div id="orderResults" class="orders"></div>
@@ -107,7 +107,7 @@
         const data = await res.json();
         alert(data.message || JSON.stringify(data));
       } catch (err) {
-        alert('❌ 错误：' + (err.message || '无法连接服务器'));
+        alert('错误：' + (err.message || '无法连接服务器'));
       }
     }
 
@@ -123,6 +123,7 @@
 
         let html = '';
         const tngLink = 'https://payment.tngdigital.com.my/sc/dRacq2iFOb';
+        let grandTotal = 0;
 
         for (const order of data) {
           const user = order.user_name || '匿名顾客';
@@ -136,8 +137,10 @@
             const price = parseFloat(item.price) || 0;
             const sub = qty * price;
             total += sub;
-            html += `▪️ ${item.selling_id || ''} ${item.product_name || ''} x${qty} = RM${sub.toFixed(2)}<br>`;
+            html += `▪️ ${item.selling_id || ''} ${item.product_name || ''} ${price.toFixed(2)} x ${qty} = RM${sub.toFixed(2)}<br>`;
           }
+
+          grandTotal += total;
 
           html += `<br><strong>总金额：RM${total.toFixed(2)}</strong><br>`;
           html += `<pre>
@@ -148,18 +151,19 @@ TNG 电子钱包付款链接：
 ${tngLink}
 </pre>`;
 
-          html += `<button class="action-button" onclick="sendPayment('${order.comment_id}', '${user}')">💳 发送付款连接</button><hr>`;
+          html += `<button class="action-button" onclick="sendPayment('${order.comment_id}', '${user}')">发送付款连接</button><hr>`;
         }
 
+        html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong>`;
         box.innerHTML = html;
       } catch (err) {
-        alert('❌ 获取订单失败：' + err.message);
+        alert('获取订单失败：' + err.message);
       }
     }
 
     async function sendPayment(commentId, user) {
       if (!commentId) {
-        alert(`❌ 无法取得 ${user} 的留言 ID，无法发送付款连接`);
+        alert(`无法取得 ${user} 的留言 ID，无法发送付款连接`);
         return;
       }
 
@@ -172,12 +176,12 @@ ${tngLink}
 
         const result = await res.json();
         if (res.ok) {
-          alert(`✅ 已成功发送付款连接给 ${user}`);
+          alert(`已成功发送付款连接给 ${user}`);
         } else {
-          alert(`❌ 发送失败：${result.error || JSON.stringify(result)}`);
+          alert(`发送失败：${result.error || JSON.stringify(result)}`);
         }
       } catch (err) {
-        alert('❌ 无法连接服务器：' + err.message);
+        alert('无法连接服务器：' + err.message);
       }
     }
   </script>
