@@ -32,7 +32,8 @@ export default async function handler(req, res) {
     const commentSnap = querySnap.docs[0];
     const { user_name, user_id } = commentSnap.data();
 
-    const orderSnap = await db.collection('triggered_comments')
+    const orderSnap = await db
+      .collection('triggered_comments')
       .where('user_id', '==', user_id)
       .get();
 
@@ -42,9 +43,11 @@ export default async function handler(req, res) {
     for (const doc of orderSnap.docs) {
       const { selling_id, product_name, quantity } = doc.data();
 
-      const productDoc = await db.collection('live_products').doc(selling_id).get();
+      const productDoc = await db
+        .collection('live_products')
+        .doc(selling_id)
+        .get();
       const productData = productDoc.exists ? productDoc.data() : null;
-
       if (!productData) continue;
 
       const rawPrice = typeof productData.price === 'string'
@@ -60,16 +63,20 @@ export default async function handler(req, res) {
     }
 
     const totalStr = `总金额：RM${total.toFixed(2)}`;
+    const sgd = (total / 3.25).toFixed(2);
+    const sgdStr = `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`;
+
     const paymentMessage = [
       `感谢下单 ${user_name || '顾客'} 🙏`,
       ...productLines,
       totalStr,
-      `付款方式：`,
-      `Lover Legend Adenium`,
-      `Maybank：512389673060`,
-      `Public Bank：3214928526`,
-      `TNG 电子钱包付款链接：`,
-      `https://payment.tngdigital.com.my/sc/dRacq2iFOb`
+      sgdStr,
+      '', // ✅ 插入空一行
+      '付款方式：',
+      'Lover Legend Adenium',
+      'Maybank：512389673060',
+      'Public Bank：3214928526',
+      'https://liveorders-public-template.vercel.app/TNG.jpg'
     ].join('\n');
 
     const url = `https://graph.facebook.com/${comment_id}/comments`;
