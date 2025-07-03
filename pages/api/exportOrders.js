@@ -54,13 +54,13 @@ export default async function handler(req, res) {
         replied ? '✔' : '✘',
       ]);
       row.font = { name: 'Calibri', size: 12 };
-      row.getCell(5).numFmt = '"RM"#,##0.00'; // 价格
-      row.getCell(6).numFmt = '"RM"#,##0.00'; // 总数
+      row.getCell(5).numFmt = '#,##0.00'; // ✅ 价格不含 RM
+      row.getCell(6).numFmt = '#,##0.00'; // ✅ 总数不含 RM
     }
 
     const subtotalRow = sheet.addRow(['', '', '', subQty, '', subTotal, '']);
     subtotalRow.font = { name: 'Calibri', size: 12 };
-    subtotalRow.getCell(6).numFmt = '"RM"#,##0.00';
+    subtotalRow.getCell(6).numFmt = '#,##0.00';
 
     [4, 5, 6].forEach(col => {
       const cell = subtotalRow.getCell(col);
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
 
   const totalRow = sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
   totalRow.font = { name: 'Calibri', size: 12, bold: true };
-  totalRow.getCell(6).numFmt = '"RM"#,##0.00';
+  totalRow.getCell(6).numFmt = '#,##0.00';
   [4, 6].forEach(col => {
     totalRow.getCell(col).border = {
       top: borderThin,
@@ -98,12 +98,12 @@ export default async function handler(req, res) {
       maxLength = 21;
     }
 
-    if (index === 6 && maxLength < 8) { // G栏 fallback
-      maxLength = 8;
+    if (index === 6 && maxLength < 8) {
+      maxLength = 10; // F栏 总数
     }
 
-    if (index === 7) { // G栏（第8列）“已发送连接”
-      maxLength = 13;
+    if (index === 7) {
+      maxLength = 15; // G栏“已发送连接”
     }
 
     col.width = maxLength;
