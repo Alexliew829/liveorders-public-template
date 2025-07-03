@@ -80,15 +80,14 @@ export default async function handler(req, res) {
       'TNG 付款连接：https://liveorders-public-template.vercel.app/TNG.jpg'
     ].join('\n');
 
-    // ✅ Step 1: 发送 Messenger 私讯（订单内容）
-    const messengerRes = await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`, {
+    // ✅ Step 1: 发送 Messenger 私讯（订单内容，使用 RESPONSE 类型 + v17.0 更稳定）
+    const messengerRes = await fetch(`https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_TOKEN}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipient: { id: user_id },
         message: { text: paymentMessage },
-        messaging_type: 'MESSAGE_TAG',
-        tag: 'POST_PURCHASE_UPDATE'
+        messaging_type: 'RESPONSE'
       })
     });
 
