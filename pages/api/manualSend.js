@@ -11,8 +11,8 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const { comment_id, method = 'comment' } =
-    req.method === 'POST' ? req.body : req.query;
+  const comment_id =
+    req.method === 'POST' ? req.body.comment_id : req.query.comment_id;
 
   if (!comment_id) {
     return res.status(400).json({ error: '缺少 comment_id 参数' });
@@ -67,60 +67,39 @@ export default async function handler(req, res) {
     const sgdStr = `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`;
 
     const paymentMessage = [
-      `感谢下单 🙏`,
+      `感谢下单 ${user_name || '顾客'} 🙏`,
       ...productLines,
-      '',
+      '', // 商品与总金额间空一行 ✅
       totalStr,
       sgdStr,
-      '',
+      '', // 总金额与付款方式间空一行 ✅
       '付款方式：',
       'Lover Legend Adenium',
       'Maybank：512389673060',
       'Public Bank：3214928526',
-      'TNG 付款连接：https://liveorders-public-template.vercel.app/TNG.jpg'
+      '', // 银行与二维码前空一行 ✅
+      'TNG 付款连接：',
+      'https://liveorders-public-template.vercel.app/TNG.jpg'
     ].join('\n');
 
-    // ✅ Step 1: 发送 Messenger 私讯（订单内容，使用 RESPONSE 类型 + v17.0 更稳定）
-    const messengerRes = await fetch(`https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_TOKEN}`, {
+    const url = `https://graph.facebook.com/${comment_id}/comments`;
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipient: { id: user_id },
-        message: { text: paymentMessage },
-        messaging_type: 'RESPONSE'
-      })
-    });
-
-    const messengerJson = await messengerRes.json();
-
-    // ✅ Step 2: 留言提醒顾客查看 Messenger（不含名字）
-    const notifyMessage = `感谢你的支持，订单详情已经发送到 Inbox 👉 https://m.me/lover.legend.gardening，请查阅 📥`;
-
-    const commentRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: notifyMessage,
+        message: paymentMessage,
         access_token: PAGE_TOKEN
       })
     });
 
-    const fbRes = await commentRes.json();
-
-    // ✅ 判断两个发送结果
-    if (!messengerRes.ok && !commentRes.ok) {
-      return res.status(500).json({ error: '发送失败：Messenger 与 留言均失败', messengerJson, fbRes });
-    }
-    if (!messengerRes.ok) {
-      return res.status(500).json({ error: '发送失败：发送 Messenger 私讯失败', messengerJson });
-    }
-    if (!commentRes.ok) {
-      return res.status(500).json({ error: '发送失败：留言通知失败', fbRes });
+    const fbRes = await r.json();
+    if (!r.ok) {
+      return res.status(500).json({ error: '发送失败', fbRes });
     }
 
     await commentSnap.ref.update({ replied: true });
 
-    return res.status(200).json({ success: true, total: total.toFixed(2) });
+    return res.status(200).json({ success: true, total: total.toFixed(2), fbRes });
   } catch (err) {
     return res.status(500).json({ error: '系统错误', message: err.message });
   }
