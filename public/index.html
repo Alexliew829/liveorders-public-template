@@ -100,7 +100,7 @@
       }
     };
 
-    window.sendMethod = 'comment';
+    window.sendMethod = 'messenger'; // 默认只支持 Messenger
 
     window.showPendingOrders = async function () {
       try {
@@ -137,11 +137,6 @@
           html += `<br><div><strong>总金额：RM${total.toFixed(2)}${sentText}</strong></div>`;
           html += `<div style="color: #444">SGD${sgd} PayLah! / PayNow me @87158951 (Siang)</div>`;
 
-          html += `<div class="send-type">
-            <label><input type="radio" name="send_${order.comment_id}" value="comment" checked> 留言</label>
-            <label style="margin-left:12px"><input type="radio" name="send_${order.comment_id}" value="messenger"> Messenger</label>
-          </div>`;
-
           html += `<button class="action-button" style="margin-top: 10px;" onclick="confirmSend('${order.comment_id}', '${user}', ${order.replied})">发送付款连接</button><hr>`;
         }
 
@@ -154,16 +149,10 @@
     };
 
     window.confirmSend = async function (commentId, user, alreadySent) {
-      const radios = document.querySelectorAll(`input[name=send_${commentId}]`);
-      for (const r of radios) {
-        if (r.checked) window.sendMethod = r.value;
-      }
-
-      if (alreadySent && window.sendMethod === 'comment') {
-        const sure = confirm(`⚠️ 此客户已发送过付款连接，确认要重新留言给 ${user} 吗？`);
+      if (alreadySent) {
+        const sure = confirm(`⚠️ 此客户已发送过付款连接，确认要重新发送给 ${user} 吗？`);
         if (!sure) return;
       }
-
       await sendPayment(commentId, user);
     };
 
@@ -177,12 +166,17 @@
         const res = await fetch('/api/manualSend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ comment_id: commentId, channel: window.sendMethod })
+          body: JSON.stringify({ comment_id: commentId, channel: 'messenger' })
         });
 
         const result = await res.json();
         if (res.ok) {
           alert(`✅ 已成功发送付款连接给 ${user}`);
+          await fetch('/api/commentNotice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment_id: commentId, message: `感谢${user}, 你的订单详情已经发送到Inbox https://m.me/lover.legend.gardening，请查阅` })
+          });
           showPendingOrders();
         } else {
           alert(`发送失败：${result.error || JSON.stringify(result)}`);
@@ -193,10 +187,8 @@
     };
 
     window.massSend = async function () {
-      const sendViaMessenger = confirm('⚠️ 群发付款连接\n选择 [确定] = Messenger\n选择 [取消] = 留言公开回复');
-      const method = sendViaMessenger ? 'messenger' : 'comment';
       try {
-        const res = await fetch(`/api/sendAll?method=${method}`);
+        const res = await fetch(`/api/sendAll?method=messenger`);
         const result = await res.json();
         alert(result.message || '群发完成');
         showPendingOrders();
