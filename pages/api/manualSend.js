@@ -76,6 +76,7 @@ export default async function handler(req, res) {
       'Lover Legend Adenium',
       'Maybank：512389673060',
       'Public Bank：3214928526',
+      '',
       'TNG 付款连接：',
       'https://liveorders-public-template.vercel.app/TNG.jpg',
       '',
@@ -97,7 +98,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
-    await commentSnap.ref.update({ replied: true });
+    // ✅ 标记为已公开回复
+    await commentSnap.ref.update({ replied_public: true });
 
     return res.status(200).json({ success: true, total: total.toFixed(2), fbRes });
   } catch (err) {
