@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>订单系统</title>
-
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="订单系统">
@@ -144,8 +143,8 @@
 
           const sgd = (total / 3.25).toFixed(2);
           const sentText = order.replied ? ' ✅' : '';
-          html += `<br><strong>总金额：RM${total.toFixed(2)}${sentText}</strong><br>`;
-          html += `<div style="margin-top: 4px; color: #444">SGD${sgd} PayLah! / PayNow me @87158951 (Siang)</div>`;
+          html += `<br><strong>总金额：RM${total.toFixed(2)}${sentText}</strong>`;
+          html += `<div style="color: #444">SGD${sgd} PayLah! / PayNow me @87158951 (Siang)</div>`;
           html += `<pre>
 总金额：RM${total.toFixed(2)}
 Lover Legend Adenium
@@ -167,7 +166,7 @@ ${tngLink}
 
     async function confirmSend(commentId, user, alreadySent) {
       if (alreadySent) {
-        const sure = confirm(`此客户已发送付款连接，确认要重新发送给 ${user} 吗？`);
+        const sure = confirm(`⚠️ 此客户已发送过付款连接，确认要重新发送给 ${user} 吗？`);
         if (!sure) return;
       }
       await sendPayment(commentId, user);
@@ -188,8 +187,8 @@ ${tngLink}
 
         const result = await res.json();
         if (res.ok) {
-          alert(`已成功发送付款连接给 ${user}`);
-          showPendingOrders();
+          alert(`✅ 已成功发送付款连接给 ${user}`);
+          showPendingOrders(); // 自动刷新状态
         } else {
           alert(`发送失败：${result.error || JSON.stringify(result)}`);
         }
