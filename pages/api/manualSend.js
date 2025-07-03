@@ -69,13 +69,16 @@ export default async function handler(req, res) {
     const paymentMessage = [
       `感谢下单 ${user_name || '顾客'} 🙏`,
       ...productLines,
+      '', // 商品与总金额间空一行 ✅
       totalStr,
       sgdStr,
-      '', // ✅ 插入空一行
+      '', // 总金额与付款方式间空一行 ✅
       '付款方式：',
       'Lover Legend Adenium',
       'Maybank：512389673060',
       'Public Bank：3214928526',
+      '', // 银行与二维码前空一行 ✅
+      'TNG 付款连接：',
       'https://liveorders-public-template.vercel.app/TNG.jpg'
     ].join('\n');
 
