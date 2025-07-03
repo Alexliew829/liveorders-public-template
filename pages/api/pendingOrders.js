@@ -18,7 +18,6 @@ export default async function handler(req, res) {
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
-
       const user_id = data.user_id || 'anonymous';
       const user_name = data.user_name || '匿名顾客';
       const key = user_id;
@@ -27,20 +26,19 @@ export default async function handler(req, res) {
       if (!productDoc.exists) continue;
       const product = productDoc.data();
 
-      const rawPrice =
-        typeof product.price === 'string'
-          ? product.price.replace(/,/g, '')
-          : product.price;
+      const rawPrice = typeof product.price === 'string'
+        ? product.price.replace(/,/g, '')
+        : product.price;
       const unitPrice = parseFloat(rawPrice) || 0;
       const quantity = parseInt(data.quantity) || 1;
-      const subtotal = unitPrice * quantity;
+      const subtotal = +(unitPrice * quantity).toFixed(2);
 
       const item = {
-        selling_id: data.selling_id || '',
-        product_name: data.product_name || '',
+        selling_id: data.selling_id,
+        product_name: data.product_name,
         quantity,
         price: unitPrice,
-        subtotal,
+        subtotal
       };
 
       if (!map.has(key)) {
@@ -50,23 +48,46 @@ export default async function handler(req, res) {
           comment_id: data.comment_id || '',
           replied: data.replied || false,
           items: [item],
-          total: subtotal,
+          total: subtotal
         });
       } else {
         const existing = map.get(key);
         existing.items.push(item);
-        existing.total += subtotal;
+        existing.total = +(existing.total + subtotal).toFixed(2);
       }
     }
 
-    const result = Array.from(map.values()).sort((a, b) =>
-      a.user_name.localeCompare(b.user_name)
-    );
+    const result = Array.from(map.values()).map(order => {
+      const itemLines = order.items.map(
+        item => `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`
+      );
 
-    const MAX_USERS = 100;
-    const limitedResult = result.slice(0, MAX_USERS);
+      const sgd = (order.total / 3.25).toFixed(2);
+      const message = [
+        `感谢你的支持 🙏`,
+        ...itemLines,
+        '',
+        `总金额：RM${order.total.toFixed(2)}`,
+        `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`,
+        '',
+        `付款方式：`,
+        `Lover Legend Adenium`,
+        `Maybank：512389673060`,
+        `Public Bank：3214928526`,
+        '',
+        `TNG 付款连接：`,
+        `https://liveorders-public-template.vercel.app/TNG.jpg`,
+        '',
+        `📸 付款后请截图发到后台：https://m.me/lover.legend.gardening`
+      ].join('\n');
 
-    res.status(200).json(limitedResult);
+      return {
+        ...order,
+        message
+      };
+    }).sort((a, b) => a.user_name.localeCompare(b.user_name));
+
+    res.status(200).json(result.slice(0, 100));
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
   }
