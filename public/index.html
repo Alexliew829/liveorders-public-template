@@ -183,7 +183,7 @@
         const result = await res.json();
         if (res.ok) {
           alert(`✅ 已成功发送付款连接给 ${user}`);
-          showPendingOrders(); // 自动刷新状态
+          showPendingOrders();
         } else {
           alert(`发送失败：${result.error || JSON.stringify(result)}`);
         }
@@ -193,7 +193,18 @@
     }
 
     async function massSend() {
-      alert('⚙️ 群发功能开发中，请稍候更新接口 /api/sendAll');
+      const sendViaMessenger = confirm('⚠️ 群发付款连接
+选择 [确定] = Messenger
+选择 [取消] = 留言公开回复');
+      const method = sendViaMessenger ? 'messenger' : 'comment';
+      try {
+        const res = await fetch(`/api/sendAll?method=${method}`);
+        const result = await res.json();
+        alert(result.message || '群发完成');
+        showPendingOrders();
+      } catch (err) {
+        alert('群发失败：' + err.message);
+      }
     }
   </script>
 </body>
