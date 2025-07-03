@@ -59,9 +59,10 @@ export default async function handler(req, res) {
       }
     }
 
-    const result = Array.from(map.values()).sort((a, b) => a.user_name.localeCompare(b.user_name));
+    const result = Array.from(map.values()).sort((a, b) =>
+      a.user_name.localeCompare(b.user_name)
+    );
 
-    // 限制最大返回数量（分页未来可拓展）
     const MAX_USERS = 100;
     const limitedResult = result.slice(0, MAX_USERS);
 
