@@ -142,7 +142,10 @@
 
           grandTotal += total;
 
-          html += `<br><strong>总金额：RM${total.toFixed(2)}</strong><br>`;
+          const sgd = (total / 3.25).toFixed(2);
+          const sentText = order.replied ? ' ✅' : '';
+          html += `<br><strong>总金额：RM${total.toFixed(2)}${sentText}</strong><br>`;
+          html += `<div style="margin-top: 4px; color: #444">SGD${sgd} PayLah! / PayNow me @87158951 (Siang)</div>`;
           html += `<pre>
 总金额：RM${total.toFixed(2)}
 Lover Legend Adenium
@@ -152,7 +155,7 @@ TNG 电子钱包付款链接：
 ${tngLink}
 </pre>`;
 
-          html += `<button class="action-button" onclick="sendPayment('${order.comment_id}', '${user}')">发送付款连接</button><hr>`;
+          html += `<button class="action-button" onclick="confirmSend('${order.comment_id}', '${user}', ${order.replied})">发送付款连接</button><hr>`;
         }
 
         html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong>`;
@@ -160,6 +163,14 @@ ${tngLink}
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
+    }
+
+    async function confirmSend(commentId, user, alreadySent) {
+      if (alreadySent) {
+        const sure = confirm(`此客户已发送付款连接，确认要重新发送给 ${user} 吗？`);
+        if (!sure) return;
+      }
+      await sendPayment(commentId, user);
     }
 
     async function sendPayment(commentId, user) {
@@ -178,6 +189,7 @@ ${tngLink}
         const result = await res.json();
         if (res.ok) {
           alert(`已成功发送付款连接给 ${user}`);
+          showPendingOrders();
         } else {
           alert(`发送失败：${result.error || JSON.stringify(result)}`);
         }
