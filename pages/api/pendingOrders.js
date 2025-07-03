@@ -19,8 +19,6 @@ export default async function handler(req, res) {
     for (const doc of snapshot.docs) {
       const data = doc.data();
 
-      if (data.replied === true) continue;
-
       const user_id = data.user_id || 'anonymous';
       const user_name = data.user_name || '匿名顾客';
       const key = user_id;
