@@ -60,7 +60,12 @@ export default async function handler(req, res) {
     }
 
     const result = Array.from(map.values()).sort((a, b) => a.user_name.localeCompare(b.user_name));
-    res.status(200).json(result);
+
+    // 限制最大返回数量（分页未来可拓展）
+    const MAX_USERS = 100;
+    const limitedResult = result.slice(0, MAX_USERS);
+
+    res.status(200).json(limitedResult);
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
   }
