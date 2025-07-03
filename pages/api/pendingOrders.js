@@ -65,7 +65,7 @@ export default async function handler(req, res) {
 
       const sgd = (order.total / 3.25).toFixed(2);
       const message = [
-        `感谢你的支持 🙏`,
+        `感谢你的支持 🙏 ，订单详情`,
         ...itemLines,
         '',
         `总金额：RM${order.total.toFixed(2)}`,
