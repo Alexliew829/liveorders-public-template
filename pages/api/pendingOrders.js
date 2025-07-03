@@ -7,15 +7,6 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 
-function formatMoney(n) {
-  return n.toLocaleString('en-MY', {
-    style: 'currency',
-    currency: 'MYR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).replace('MYR', 'RM').replace(/\u00A0/g, '');
-}
-
 export default async function handler(req, res) {
   try {
     const snapshot = await db
@@ -27,6 +18,7 @@ export default async function handler(req, res) {
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
+
       if (data.replied === true) continue;
 
       const user_id = data.user_id || 'anonymous';
@@ -37,7 +29,10 @@ export default async function handler(req, res) {
       if (!productDoc.exists) continue;
       const product = productDoc.data();
 
-      const rawPrice = typeof product.price === 'string' ? product.price.replace(/,/g, '') : product.price;
+      const rawPrice =
+        typeof product.price === 'string'
+          ? product.price.replace(/,/g, '')
+          : product.price;
       const unitPrice = parseFloat(rawPrice) || 0;
       const quantity = parseInt(data.quantity) || 1;
       const subtotal = unitPrice * quantity;
@@ -67,33 +62,27 @@ export default async function handler(req, res) {
 
     const result = Array.from(map.values());
 
-    // ✅ 拼接文字格式（新版格式）
+    // ✅ 格式化显示内容（纯文本）
     const textBlocks = [];
     let grandTotal = 0;
 
-    for (const order of result) {
-      const lines = [];
-      lines.push(`🧾 ${order.user_name}`);
+    for (const user of result) {
+      textBlocks.push(`🧾 ${user.user_name}`);
 
-      for (const item of order.items) {
-        const id = item.selling_id;
-        const name = item.product_name;
-        const qty = item.quantity;
-        const unit = item.price.toFixed(2);
-        const total = formatMoney(item.subtotal);
-        lines.push(`▪️ ${id} ${name} ${unit} x ${qty} = ${total}`);
+      for (const item of user.items) {
+        const line = `▪️ ${item.selling_id} ${item.product_name} ${item.price.toFixed(2)} x ${item.quantity} = RM${item.subtotal.toFixed(2)}`;
+        textBlocks.push(line);
       }
 
-      lines.push(`💰 小计：${formatMoney(order.total)}`);
-      textBlocks.push(lines.join('\n'));
-
-      grandTotal += order.total;
+      textBlocks.push(`总金额：RM${user.total.toFixed(2)}\n`);
+      grandTotal += user.total;
     }
 
     if (textBlocks.length > 0) {
-      textBlocks.push(`\n🔸 总销售额：${formatMoney(grandTotal)}`);
+      textBlocks.push(`🔸 总销售额：RM${grandTotal.toFixed(2)}`);
     }
 
+    res.setHeader('Content-Type', 'text/plain'); // ✅ 返回纯文本，避免 JSON 错误
     res.status(200).send(textBlocks.join('\n\n'));
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
