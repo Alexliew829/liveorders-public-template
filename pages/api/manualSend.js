@@ -11,14 +11,15 @@ const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 export default async function handler(req, res) {
-  const comment_id =
-    req.method === 'POST' ? req.body.comment_id : req.query.comment_id;
+  const { comment_id, channel = 'comment' } =
+    req.method === 'POST' ? req.body : req.query;
 
   if (!comment_id) {
     return res.status(400).json({ error: '缺少 comment_id 参数' });
   }
 
   try {
+    // 查找该顾客的订单留言
     const querySnap = await db
       .collection('triggered_comments')
       .where('comment_id', '==', comment_id)
@@ -30,8 +31,9 @@ export default async function handler(req, res) {
     }
 
     const commentSnap = querySnap.docs[0];
-    const { user_name, user_id } = commentSnap.data();
+    const { user_id } = commentSnap.data();
 
+    // 查找此顾客的所有订单
     const orderSnap = await db
       .collection('triggered_comments')
       .where('user_id', '==', user_id)
@@ -43,10 +45,7 @@ export default async function handler(req, res) {
     for (const doc of orderSnap.docs) {
       const { selling_id, product_name, quantity } = doc.data();
 
-      const productDoc = await db
-        .collection('live_products')
-        .doc(selling_id)
-        .get();
+      const productDoc = await db.collection('live_products').doc(selling_id).get();
       const productData = productDoc.exists ? productDoc.data() : null;
       if (!productData) continue;
 
@@ -67,23 +66,24 @@ export default async function handler(req, res) {
     const sgdStr = `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`;
 
     const paymentMessage = [
-      `感谢下单 ${user_name || '顾客'} 🙏`,
+      `感谢你的支持 🙏`,
       ...productLines,
-      '', // 商品与总金额间空一行 ✅
+      '',
       totalStr,
       sgdStr,
-      '', // 总金额与付款方式间空一行 ✅
+      '',
       '付款方式：',
       'Lover Legend Adenium',
       'Maybank：512389673060',
       'Public Bank：3214928526',
-      '', // 银行与二维码前空一行 ✅
       'TNG 付款连接：',
-      'https://liveorders-public-template.vercel.app/TNG.jpg'
+      'https://liveorders-public-template.vercel.app/TNG.jpg',
+      '',
+      '📸 付款后请截图发到后台：https://m.me/lover.legend.gardening'
     ].join('\n');
 
-    const url = `https://graph.facebook.com/${comment_id}/comments`;
-    const r = await fetch(url, {
+    // ✅ 直接在留言处回复订单详情
+    const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -92,9 +92,9 @@ export default async function handler(req, res) {
       })
     });
 
-    const fbRes = await r.json();
-    if (!r.ok) {
-      return res.status(500).json({ error: '发送失败', fbRes });
+    const fbRes = await replyRes.json();
+    if (!replyRes.ok) {
+      return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
     await commentSnap.ref.update({ replied: true });
