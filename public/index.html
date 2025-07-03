@@ -126,11 +126,9 @@
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
 
-          // ✅ 新增公开留言按钮
-          const sent = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sent}</button>`;
+          const sentLabel = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
+          html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
 
-          // ✅ 原复制按钮保留
           html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button><hr>`;
         }
 
@@ -149,13 +147,12 @@
       });
     };
 
-    // ✅ 新增：公开留言付款资料按钮功能
     window.publicReply = async function(btn, comment_id, alreadySent) {
       if (alreadySent) {
         const confirmSend = confirm('该顾客已公开留言发送过资料，确定要重新发送？');
         if (!confirmSend) return;
       }
-      btn.disabled = true;
+
       btn.innerText = '发送中...';
 
       try {
