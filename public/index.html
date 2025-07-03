@@ -54,19 +54,19 @@
       font-size: 17px;
       display: block;
     }
+    .send-type {
+      margin: 6px 0;
+    }
   </style>
 </head>
 <body>
   <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
-
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
-
   <div id="orderResults" class="orders"></div>
-
   <script>
     async function call(api, isPost = false) {
       try {
@@ -87,18 +87,14 @@
           a.remove();
           return;
         }
-
-        const res = await fetch(api, {
-          method: isPost ? 'POST' : 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
+        const res = await fetch(api, { method: isPost ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         alert(data.message || JSON.stringify(data));
       } catch (err) {
         alert('错误：' + (err.message || '无法连接服务器'));
       }
     }
-
+    let sendMethod = 'comment';
     async function showPendingOrders() {
       try {
         const res = await fetch('/api/pendingOrders');
@@ -108,17 +104,13 @@
           box.innerHTML = '暂无待发订单';
           return;
         }
-
         let html = '';
         let grandTotal = 0;
-
         for (const order of data) {
           const user = order.user_name || '匿名顾客';
           const items = order.items || [];
           let total = 0;
-
           html += `<strong>${user}</strong>`;
-
           for (const item of items) {
             const qty = item.quantity || 1;
             const price = parseFloat(item.price) || 0;
@@ -126,55 +118,59 @@
             total += sub;
             html += `<div>▪️ ${item.selling_id || ''} ${item.product_name || ''} ${price.toFixed(2)} x ${qty} = RM${sub.toFixed(2)}</div>`;
           }
-
           grandTotal += total;
-
           const sgd = (total / 3.25).toFixed(2);
           const sentText = order.replied ? ' ✅' : '';
-          html += `<div><strong>总金额：RM${total.toFixed(2)}${sentText}</strong></div>`;
+          html += `<br><div><strong>总金额：RM${total.toFixed(2)}${sentText}</strong></div>`;
           html += `<div style="color: #444">SGD${sgd} PayLah! / PayNow me @87158951 (Siang)</div>`;
-
+          html += `<div class="send-type">
+            <label><input type="radio" name="send_${order.comment_id}" value="comment" checked> 留言</label>
+            <label style="margin-left:12px"><input type="radio" name="send_${order.comment_id}" value="messenger"> Messenger</label>
+          </div>`;
           html += `<button class="action-button" style="margin-top: 10px;" onclick="confirmSend('${order.comment_id}', '${user}', ${order.replied})">发送付款连接</button><hr>`;
         }
-
-        html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong>`;
+        html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br><br>`;
+        html += `<button class="action-button" onclick="massSend()">群发付款链接</button>`;
         box.innerHTML = html;
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
     }
-
     async function confirmSend(commentId, user, alreadySent) {
-      if (alreadySent) {
-        const sure = confirm(`⚠️ 此客户已发送过付款连接，确认要重新发送给 ${user} 吗？`);
+      const radios = document.querySelectorAll(`input[name=send_${commentId}]`);
+      for (const r of radios) {
+        if (r.checked) sendMethod = r.value;
+      }
+      if (alreadySent && sendMethod === 'comment') {
+        const sure = confirm(`⚠️ 此客户已发送过付款连接，确认要重新留言给 ${user} 吗？`);
         if (!sure) return;
       }
       await sendPayment(commentId, user);
     }
-
     async function sendPayment(commentId, user) {
       if (!commentId) {
         alert(`无法取得 ${user} 的留言 ID，无法发送付款连接`);
         return;
       }
-
       try {
         const res = await fetch('/api/manualSend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ comment_id: commentId })
+          body: JSON.stringify({ comment_id: commentId, method: sendMethod })
         });
-
         const result = await res.json();
         if (res.ok) {
           alert(`✅ 已成功发送付款连接给 ${user}`);
-          showPendingOrders(); // 自动刷新状态
+          showPendingOrders();
         } else {
           alert(`发送失败：${result.error || JSON.stringify(result)}`);
         }
       } catch (err) {
         alert('无法连接服务器：' + err.message);
       }
+    }
+    async function massSend() {
+      alert('⚙️ 群发功能开发中，请稍候更新接口 /api/sendAll');
     }
   </script>
 </body>
