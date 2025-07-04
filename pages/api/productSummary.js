@@ -14,22 +14,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const snapshot = await db
+    // 默认不排序，避免无索引时报错
+    let query = db
       .collection('triggered_comments')
-      .where('selling_id', '==', selling_id)
-      .orderBy('created_at', 'asc')
-      .get();
+      .where('selling_id', '==', selling_id);
 
-    const results = [];
-    for (const doc of snapshot.docs) {
+    // 尝试加排序，如果没有建立索引则略过
+    try {
+      query = query.orderBy('created_at', 'asc');
+    } catch (e) {
+      console.warn('未建立索引，已跳过排序 created_at');
+    }
+
+    const snapshot = await query.get();
+
+    const results = snapshot.docs.map(doc => {
       const data = doc.data();
-      results.push({
+      return {
         user_name: data.user_name || '匿名顾客',
         selling_id: data.selling_id,
         product_name: data.product_name,
         quantity: data.quantity || 1
-      });
-    }
+      };
+    });
 
     res.status(200).json(results);
   } catch (err) {
