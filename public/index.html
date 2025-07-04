@@ -109,7 +109,7 @@
           const day = String(today.getDate()).padStart(2, '0');
           const month = String(today.getMonth() + 1).padStart(2, '0');
           const year = String(today.getFullYear()).toString().slice(2);
-          const filename = ${day}-${month}-${year} Bonsai-Order.xlsx;
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -127,32 +127,6 @@
       }
     };
 
-    function sortItemsInMessage(message) {
-      const productRegex = /▪️\s*(A|B)\s*\d{1,3}[^▪️\n]*/g;
-      const matches = message.match(productRegex);
-      if (!matches) return message;
-
-      const sorted = matches.sort((a, b) => {
-        const extract = s => {
-          const m = s.match(/(A|B)\s*(\d+)/);
-          return [m[1], parseInt(m[2], 10)];
-        };
-        const [prefixA, numA] = extract(a);
-        const [prefixB, numB] = extract(b);
-        if (prefixA !== prefixB) return prefixA.localeCompare(prefixB);
-        return numA - numB;
-      });
-
-      const fixed = sorted.join('\n');
-
-      const restMatch = message.match(/SGD[\d\.]+ PayLah![\s\S]*/);
-      const rest = restMatch ? restMatch[0] : '';
-      const amountMatch = message.match(/总金额：RM[\d\.]+/);
-      const amountLine = amountMatch ? amountMatch[0] : '';
-
-      return message.replace(/▪️[\s\S]*?SGD[\d\.]+.*PayLah![\s\S]*/g, '').replace('🙏', '🙏\n' + fixed) + '\n' + amountLine + '\n' + rest;
-    }
-
     async function showPendingOrders() {
       try {
         const res = await fetch('/api/pendingOrders');
@@ -165,12 +139,12 @@
         summaryBox.innerHTML = '';
         if (Object.keys(grouped).length > 0) {
           let total = orders.reduce((sum, o) => sum + o.total, 0);
-          let html = <div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>;
-          html += <div class="inline-buttons">;
+          let html = `<div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
+          html += `<div class="inline-buttons">`;
           for (const id in grouped) {
-            html += <button class="action-button">${id}</button>;
+            html += `<button class="action-button">${id}</button>`;
           }
-          html += </div>;
+          html += `</div>`;
           summaryBox.innerHTML = html;
         }
 
@@ -179,31 +153,30 @@
         orders.forEach(order => {
           const div = document.createElement('div');
           div.className = 'orders';
-          const sortedMsg = sortItemsInMessage(order.message);
-          div.innerHTML = 
+          div.innerHTML = `
             <strong>${order.user_name}</strong>
-            <div class="message-box">${sortedMsg}</div>
-            <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between;">
-              <button class="action-button send-btn" data-id="${order.comment_id}" style="width: 48%; min-width: 140px; max-width: 200px; font-size: 16px;">公开发送</button>
-              <button class="action-button" style="width: 48%; min-width: 140px; max-width: 200px; font-size: 16px; background-color: #888;" onclick="copyMessage(this)">私发复制</button>
+            <div class="message-box">${order.message}</div>
+            <div class="inline-buttons">
+              <button class="action-button send-btn" data-id="${order.comment_id}">公开发送</button>
+              <button class="action-button" style="background-color:#888;" onclick="copyMessage(this)">私发复制</button>
             </div>
-          ;
+          `;
           orderResults.appendChild(div);
         });
 
         document.querySelectorAll('.send-btn').forEach(btn => {
           btn.onclick = async () => {
-            const confirmSend = confirm("⚠️ 已发送的留言不会重复发送，是否确认公开回复付款资料？");
+            const confirmSend = confirm("⚠️ 已发送过付款资料，是否确认再发送一次？");
             if (!confirmSend) return;
             const commentId = btn.dataset.id;
-            const res = await fetch(/api/manualSend?comment_id=${commentId}&force=yes);
+            const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
             const data = await res.json();
             if (data.success) {
               btn.innerText = "✅ 已发送";
             } else {
               alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
             }
-          };
+          }
         });
       } catch (err) {
         alert('显示订单失败：' + err.message);
