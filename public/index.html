@@ -12,35 +12,39 @@
       font-family: sans-serif;
       background-color: #f7f7f7;
       text-align: center;
-      padding-top: 20px;
+      padding-top: 60px;
+    }
+    .icon {
+      width: 120px;
+      margin-bottom: 40px;
     }
     .button-container {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 30px;
       align-items: center;
-      margin-bottom: 20px;
     }
     .action-button {
-      padding: 10px 16px;
-      font-size: 17px;
+      padding: 14px 28px;
+      font-size: 20px;
       background-color: #228B22;
       color: white;
       font-weight: bold;
       border: none;
-      border-radius: 8px;
+      border-radius: 12px;
       cursor: pointer;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+      width: 260px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     .action-button:hover {
       background-color: #1a6f1a;
     }
     .orders {
       max-width: 700px;
-      margin: 0 auto 20px;
+      margin: 30px auto;
       text-align: left;
       background: white;
-      padding: 16px;
+      padding: 20px;
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       font-size: 15px;
@@ -53,7 +57,7 @@
     .message-box {
       background: #f0f0f0;
       border: 1px dashed #bbb;
-      padding: 10px;
+      padding: 12px;
       white-space: pre-wrap;
       margin-top: 10px;
       border-radius: 8px;
@@ -62,58 +66,58 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 5px;
+      margin: 15px 0;
+      justify-content: flex-start;
     }
     .inline-buttons .action-button {
       width: auto;
-      background: #555;
       padding: 8px 12px;
       font-size: 14px;
-    }
-    .order-actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      gap: 8px;
-      margin-top: 10px;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
+  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
-
   <div id="groupedOrders" class="orders"></div>
   <div id="orderResults" class="orders"></div>
 
   <script>
-    function call(url, usePost = false) {
-      const options = usePost
-        ? { method: 'POST', headers: { 'Content-Type': 'application/json' } }
-        : {};
-      fetch(url, options)
-        .then(res => res.json())
-        .then(result => {
-          if (result.success) {
-            if (url.includes('startOrderListener')) {
-              alert('✅ 成功写入商品资料');
-            } else {
-              alert('✅ 操作成功');
-            }
-          } else {
-            alert('❌ 操作失败：' + (result.error || '未知错误'));
-          }
-        })
-        .catch(err => alert('请求失败：' + err.message));
-    }
+    window.call = async function(api, isPost = false) {
+      try {
+        if (api.includes('exportOrders')) {
+          const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
+          const blob = await res.blob();
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
 
-    const formatter = new Intl.NumberFormat('en-MY', {
-      style: 'currency',
-      currency: 'MYR'
-    });
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('错误：' + (err.message || '无法连接服务器'));
+      }
+    };
 
     window.showPendingOrders = async function () {
       try {
@@ -122,78 +126,51 @@
         const box = document.getElementById('orderResults');
         const groupBox = document.getElementById('groupedOrders');
 
-        const orders = data.orders || [];
-        const grouped = data.grouped || {};
-
-        if (!Array.isArray(orders) || orders.length === 0) {
+        if (!Array.isArray(data) || data.length === 0) {
           box.innerHTML = '暂无待发订单';
           return;
         }
 
-        let groupedByUser = {};
-        for (const order of orders) {
-          const name = order.user_name || '匿名顾客';
-          if (!groupedByUser[name]) groupedByUser[name] = [];
-          groupedByUser[name].push(order);
+        const grouped = {};
+        for (const order of data) {
+          if (!grouped[order.selling_id]) grouped[order.selling_id] = [];
+          grouped[order.selling_id].push(order);
         }
+
+        const uniqueSellingIds = Object.keys(grouped);
+        let headerHTML = `<strong>📦 A类商品订单小结：</strong><div class="inline-buttons">`;
+        for (const id of uniqueSellingIds) {
+          headerHTML += `<button class="action-button" onclick="showProductSummary('${id}')">${id}</button>`;
+        }
+        headerHTML += '</div>';
+        groupBox.innerHTML = headerHTML;
 
         let html = '';
         let grandTotal = 0;
 
-        for (const [user, userOrders] of Object.entries(groupedByUser)) {
-          let userTotal = 0;
-          let latestCommentId = '';
-          let repliedPublic = false;
-          let messageLines = [];
-
-          for (const item of userOrders) {
-            latestCommentId = item.comment_id;
-            repliedPublic = repliedPublic || item.replied_public;
-
-            const unitPrice = parseFloat(item.price || 0);
-            const quantity = parseInt(item.quantity || 1);
-            const subtotal = unitPrice * quantity;
-            userTotal += subtotal;
-
-            const line = `▪️ ${item.selling_id} ${item.product_name} ${unitPrice.toFixed(2)} x ${quantity} = RM${subtotal.toFixed(2)}`;
-            messageLines.push(line);
-          }
-
-          grandTotal += userTotal;
-
-          const message = `感谢支持，你的订单详情🙏\n${messageLines.join('\n')}\n\n总金额：${formatter.format(userTotal)}\nSGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
+        for (const order of data) {
+          const user = order.user_name || '匿名顾客';
+          const message = order.message || '';
+          grandTotal += order.total || 0;
 
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
-          html += `<div class="order-actions">
-            <button class="action-button" onclick="publicReply(this, '${latestCommentId}', ${repliedPublic})">
-              ${repliedPublic ? '✅ 已发送' : '公开留言发送付款资料'}
-            </button>
-            <button class="action-button" onclick="copyMessage(this)">复制私发客户</button>
-          </div><hr>`;
+
+          const sentLabel = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
+          html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
+
+          html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button><hr>`;
         }
 
-        let headerHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
-        headerHTML += `<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">`;
-        const sellingIds = Object.keys(grouped);
-        if (sellingIds.length === 0) {
-          headerHTML += '暂无 A 类订单';
-        } else {
-          for (const sid of sellingIds) {
-            headerHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
-          }
-        }
-        headerHTML += '</div></div><br>';
-
-        box.innerHTML = headerHTML + html;
-        groupBox.innerHTML = '';
+        html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br><br>`;
+        box.innerHTML = html;
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
     };
 
     window.copyMessage = function(btn) {
-      const messageBox = btn.parentElement.previousElementSibling;
+      const messageBox = btn.previousElementSibling.previousElementSibling;
       const text = messageBox.innerText || messageBox.textContent;
       navigator.clipboard.writeText(text).then(() => {
         alert('已复制订单详情，可粘贴到 Messenger 私信顾客');
@@ -249,7 +226,7 @@
       } catch (err) {
         alert('读取详情失败：' + err.message);
       }
-    };
+    }
   </script>
 </body>
 </html>
