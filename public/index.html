@@ -72,6 +72,7 @@
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
   <div id="orderResults" class="orders"></div>
+  <div id="groupedOrders" class="orders"></div>
 
   <script>
     const formatter = new Intl.NumberFormat('en-MY', {
@@ -114,12 +115,19 @@
       try {
         const res = await fetch('/api/pendingOrders');
         const data = await res.json();
-        const orders = data.result || [];
         const box = document.getElementById('orderResults');
+        const groupBox = document.getElementById('groupedOrders');
 
-        if (!Array.isArray(orders) || orders.length === 0) {
+        if (!data || (!Array.isArray(data.result) && typeof data.grouped !== 'object')) {
           box.innerHTML = '暂无待发订单';
           return;
+        }
+
+        const orders = data.result || [];
+        const grouped = data.grouped || {};
+
+        if (orders.length === 0) {
+          box.innerHTML = '暂无待发订单';
         }
 
         let html = '';
@@ -138,21 +146,25 @@
 
           html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button>`;
 
-          // A 类商品详情按钮
-          const aItems = (order.items || []).filter(item => item.selling_id?.startsWith('A'));
-          const shown = new Set();
-          for (const a of aItems) {
-            if (!shown.has(a.selling_id)) {
-              html += `<button class="action-button" style="margin-top: 10px; background:#555" onclick="showProductSummary('${a.selling_id}')">查看 ${a.selling_id} 订单详情</button>`;
-              shown.add(a.selling_id);
-            }
-          }
-
           html += '<hr>';
         }
 
         html += `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong><br><br>`;
         box.innerHTML = html;
+
+        // A类商品订单列表
+        let groupHTML = '<h3>📦 A类商品订单小结：</h3>';
+        const sellingIds = Object.keys(grouped);
+        if (sellingIds.length === 0) {
+          groupHTML += '暂无 A 类订单';
+        } else {
+          for (const sid of sellingIds) {
+            const item = grouped[sid];
+            groupHTML += `<button class="action-button" style="margin: 10px; background: #555" onclick="showProductSummary('${sid}')">查看 ${sid} ${item.product_name} 订单详情</button>`;
+          }
+        }
+        groupBox.innerHTML = groupHTML;
+
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
@@ -200,8 +212,8 @@
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return alert('暂无订单');
 
-        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} ${entry.quantity} 顾客名字（${entry.user_name || '匿名'}）`).join('<br>');
-        alert(`【${sellingId} 订单详情】\n\n` + list.replace(/<br>/g, '\n'));
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} ${entry.quantity} 顾客名字（${entry.user_name || '匿名'}）`).join('\n');
+        alert(`【${sellingId} 订单详情】\n\n` + list);
       } catch (err) {
         alert('读取详情失败：' + err.message);
       }
