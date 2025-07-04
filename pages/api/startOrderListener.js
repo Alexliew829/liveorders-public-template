@@ -78,7 +78,7 @@ export default async function handler(req, res) {
 
       // ✅ 没写库存就默认为 1（只针对 A 类）
       const stock = type === 'A'
-        ? (priceMatch[2] ? parseInt(priceMatch[2]) : 1)
+        ? (priceMatch[2] ? parseInt(priceMatch[2]) : 50)
         : undefined;
 
       // ✅ 提取商品名
