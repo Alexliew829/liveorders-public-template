@@ -35,10 +35,9 @@ export default async function handler(req, res) {
   for (const [customer, orders] of Object.entries(grouped)) {
     let subQty = 0;
     let subTotal = 0;
-    const startRow = sheet.lastRow.number + 1;
 
     for (const order of orders) {
-      const { selling_id, product_name, price, replied, quantity = 1 } = order;
+      const { selling_id, product_name, price, quantity = 1 } = order;
       const priceNum = Number(price);
       const total = priceNum * Number(quantity);
       subQty += Number(quantity);
@@ -51,14 +50,18 @@ export default async function handler(req, res) {
         quantity,
         priceNum,
         total,
-        replied ? '✔' : '✘',
+        ''  // ✅ 不在每个商品行显示“已发送连接”
       ]);
       row.font = { name: 'Calibri', size: 12 };
-      row.getCell(5).numFmt = '#,##0.00'; // ✅ 价格不含 RM
-      row.getCell(6).numFmt = '#,##0.00'; // ✅ 总数不含 RM
+      row.getCell(5).numFmt = '#,##0.00';
+      row.getCell(6).numFmt = '#,##0.00';
     }
 
-    const subtotalRow = sheet.addRow(['', '', '', subQty, '', subTotal, '']);
+    const replied = orders[0].replied; // ✅ 统一判断一个顾客是否发送过
+    const subtotalRow = sheet.addRow([
+      '', '', '', subQty, '', subTotal,
+      replied ? '✔' : '✘'  // ✅ 小计行才显示是否已发送
+    ]);
     subtotalRow.font = { name: 'Calibri', size: 12 };
     subtotalRow.getCell(6).numFmt = '#,##0.00';
 
