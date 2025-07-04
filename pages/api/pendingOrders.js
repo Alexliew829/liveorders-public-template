@@ -7,6 +7,11 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 
+function normalizeSellingId(id = '') {
+  const match = id.toUpperCase().match(/A\s*[-_]?0*(\d{1,3})/);
+  return match ? `A${match[1].padStart(3, '0')}` : id.toUpperCase();
+}
+
 export default async function handler(req, res) {
   try {
     const snapshot = await db
@@ -23,7 +28,8 @@ export default async function handler(req, res) {
       const user_name = data.user_name || '匿名顾客';
       const key = user_id;
 
-      const productDoc = await db.collection('live_products').doc(data.selling_id).get();
+      const normalizedId = normalizeSellingId(data.selling_id);
+      const productDoc = await db.collection('live_products').doc(normalizedId).get();
       if (!productDoc.exists) continue;
       const product = productDoc.data();
 
@@ -35,7 +41,7 @@ export default async function handler(req, res) {
       const subtotal = +(unitPrice * quantity).toFixed(2);
 
       const item = {
-        selling_id: data.selling_id,
+        selling_id: normalizedId,
         product_name: data.product_name,
         quantity,
         price: unitPrice,
@@ -59,7 +65,7 @@ export default async function handler(req, res) {
       }
 
       if (product.type === 'A') {
-        const aKey = `${data.selling_id}`;
+        const aKey = normalizedId;
         if (!groupedAProducts.has(aKey)) groupedAProducts.set(aKey, []);
         groupedAProducts.get(aKey).push({
           user_name,
@@ -108,7 +114,6 @@ export default async function handler(req, res) {
       };
     }
 
-    // ✅ 主动避免返回空数组触发“暂无订单”误判
     if (result.length === 0) {
       return res.status(200).json([]);
     }
