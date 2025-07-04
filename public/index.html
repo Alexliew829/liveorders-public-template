@@ -156,11 +156,11 @@
           html += '<hr>';
         }
 
-        html += `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong><br><br>`;
         box.innerHTML = html;
 
         // A类商品订单列表
-        let groupHTML = '<h3>📦 A类商品订单小结：</h3><div class="inline-buttons">';
+        let groupHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong><br><br>`;
+        groupHTML += '<h3>📦 A类商品订单小结：</h3><div class="inline-buttons">';
         const sellingIds = Object.keys(grouped);
         if (sellingIds.length === 0) {
           groupHTML += '暂无 A 类订单';
