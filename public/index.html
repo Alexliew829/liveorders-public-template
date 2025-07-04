@@ -90,7 +90,6 @@
   <div id="orderResults" class="orders"></div>
 
   <script>
-    // ✅ 正确处理 GET / POST 请求
     function call(url, usePost = false) {
       const options = usePost
         ? { method: 'POST', headers: { 'Content-Type': 'application/json' } }
@@ -99,7 +98,9 @@
         .then(res => res.json())
         .then(result => {
           if (result.success) {
-            alert('✅ 操作成功');
+            const msg = url.includes('startOrderListener') ? '✅ 成功写入商品资料' : '✅ 操作成功';
+            alert(msg);
+            if (usePost) location.reload();
           } else {
             alert('❌ 操作失败：' + (result.error || '未知错误'));
           }
