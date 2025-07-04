@@ -90,10 +90,10 @@
   </style>
 </head>
 <body>
-  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
+  <img src="apple-touch-icon.png" alt="抓单系统" class="icon" />
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
-    <button class="action-button" onclick="call('/api/pendingOrders')">显示待发订单</button>
+    <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
   <div id="groupedOrders" class="orders"></div>
@@ -131,6 +131,40 @@
         alert('错误：' + (err.message || '无法连接服务器'));
       }
     };
+
+    async function showPendingOrders() {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+
+        const grouped = data.grouped || {};
+        const orders = data.orders || [];
+
+        const summaryBox = document.getElementById('groupedOrders');
+        summaryBox.innerHTML = '';
+        if (Object.keys(grouped).length > 0) {
+          let total = orders.reduce((sum, o) => sum + o.total, 0);
+          let html = `<strong>今日直播总销售额：RM${total.toFixed(2)}</strong><br/>`;
+          html += `<strong>📦 A类商品订单小结：</strong><div class="inline-buttons">`;
+          for (const id in grouped) {
+            html += `<button class="action-button">${id}</button>`;
+          }
+          html += `</div>`;
+          summaryBox.innerHTML = html;
+        }
+
+        const orderResults = document.getElementById('orderResults');
+        orderResults.innerHTML = '';
+        orders.forEach(order => {
+          const div = document.createElement('div');
+          div.className = 'orders';
+          div.innerHTML = `<strong>${order.user_name}</strong><div class="message-box">${order.message}</div>`;
+          orderResults.appendChild(div);
+        });
+      } catch (err) {
+        alert('显示订单失败：' + err.message);
+      }
+    }
   </script>
 </body>
 </html>
