@@ -220,7 +220,17 @@
       }
     };
 
-    window.showProductSummary = async function(sellingId) {
+    window.showProductSummary = async function(sellingIdRaw) {
+      const normalizeSellingId = (raw) => {
+        const match = raw.match(/[a-zA-Z]\s*0*(\d{1,3})/);
+        if (!match) return raw;
+        const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
+        const num = match[1].padStart(3, '0');
+        return `${letter}${num}`;
+      };
+
+      const sellingId = normalizeSellingId(sellingIdRaw);
+
       try {
         const res = await fetch(`/api/productSummary?selling_id=${encodeURIComponent(sellingId)}`);
         const data = await res.json();
