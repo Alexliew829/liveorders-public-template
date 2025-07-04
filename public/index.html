@@ -89,6 +89,21 @@
   <div id="orderResults" class="orders"></div>
 
   <script>
+    // ✅ 修复 call() 未定义的问题
+    function call(url, reload = false) {
+      fetch(url)
+        .then(res => res.json())
+        .then(result => {
+          if (result.success) {
+            alert('✅ 操作成功');
+            if (reload) location.reload();
+          } else {
+            alert('❌ 操作失败：' + (result.error || '未知错误'));
+          }
+        })
+        .catch(err => alert('请求失败：' + err.message));
+    }
+
     const formatter = new Intl.NumberFormat('en-MY', {
       style: 'currency',
       currency: 'MYR'
@@ -135,7 +150,19 @@
 
           grandTotal += userTotal;
 
-          const message = `感谢支持 ，你的订单详情🙏\n${messageLines.join('\n')}\n\n总金额：${formatter.format(userTotal)}\nSGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
+          const message = `感谢支持 ，你的订单详情🙏
+${messageLines.join('\n')}
+
+总金额：${formatter.format(userTotal)}
+SGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)
+
+付款方式：
+Lover Legend Adenium
+Maybank：512389673060
+Public Bank：3214928526
+
+TNG 付款连接：
+https://liveorders-public-template.vercel.app/TNG.jpg`;
 
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
