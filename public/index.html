@@ -62,6 +62,17 @@
       margin-top: 10px;
       border-radius: 8px;
     }
+    .inline-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .inline-buttons .action-button {
+      width: auto;
+      background: #555;
+      padding: 10px 16px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
@@ -71,7 +82,7 @@
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
-  <div id="groupedOrders" class="orders"></div> <!-- ⬅️ 调整到上方 -->
+  <div id="groupedOrders" class="orders"></div>
   <div id="orderResults" class="orders"></div>
 
   <script>
@@ -153,16 +164,17 @@
         box.innerHTML = html;
 
         // A类商品订单列表
-        let groupHTML = '<h3>📦 A类商品订单小结：</h3>';
+        let groupHTML = '<h3>📦 A类商品订单小结：</h3><div class="inline-buttons">';
         const sellingIds = Object.keys(grouped);
         if (sellingIds.length === 0) {
           groupHTML += '暂无 A 类订单';
         } else {
           for (const sid of sellingIds) {
             const item = grouped[sid];
-            groupHTML += `<button class="action-button" style="margin: 10px; background: #555" onclick="showProductSummary('${sid}')">查看 ${sid} ${item.product_name} 订单详情</button>`;
+            groupHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
           }
         }
+        groupHTML += '</div>';
         groupBox.innerHTML = groupHTML;
 
       } catch (err) {
@@ -208,11 +220,11 @@
 
     window.showProductSummary = async function(sellingId) {
       try {
-        const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
+        const res = await fetch(`/api/productSummary?selling_id=${encodeURIComponent(sellingId)}`);
         const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) return alert('暂无订单');
+        if (!Array.isArray(data) || data.length === 0) return alert(`【${sellingId}】暂无订单`);
 
-        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} ${entry.quantity} 顾客名字（${entry.user_name || '匿名'}）`).join('\n');
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
         alert(`【${sellingId} 订单详情】\n\n` + list);
       } catch (err) {
         alert('读取详情失败：' + err.message);
