@@ -108,6 +108,11 @@ export default async function handler(req, res) {
       };
     }
 
+    // ✅ 主动避免返回空数组触发“暂无订单”误判
+    if (result.length === 0) {
+      return res.status(200).json([]);
+    }
+
     res.status(200).json({ result: result.slice(0, 100), grouped });
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
