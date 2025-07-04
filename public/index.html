@@ -62,6 +62,14 @@
       margin-top: 10px;
       border-radius: 8px;
     }
+    .a-product-summary {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 5px 0 10px;
+      font-size: 14px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +82,11 @@
   <div id="orderResults" class="orders"></div>
 
   <script>
+    const formatter = new Intl.NumberFormat('en-MY', {
+      style: 'currency',
+      currency: 'MYR'
+    });
+
     window.call = async function(api, isPost = false) {
       try {
         if (api.includes('exportOrders')) {
@@ -129,10 +142,17 @@
           const sentLabel = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
           html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
 
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button><hr>`;
+          html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button>`;
+
+          // 如果是 A 类商品，加入查看库存按钮
+          if (order.items?.[0]?.selling_id?.startsWith('A')) {
+            html += `<button class="action-button" style="margin-top: 10px; background-color: #555;" onclick="showProductSummary('${order.items[0].selling_id}')">查看 ${order.items[0].selling_id} 库存详情</button>`;
+          }
+
+          html += '<hr>';
         }
 
-        html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br><br>`;
+        html += `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong><br><br>`;
         box.innerHTML = html;
       } catch (err) {
         alert('获取订单失败：' + err.message);
@@ -172,6 +192,19 @@
       } catch (err) {
         btn.innerText = '发送失败';
         alert('系统错误：' + err.message);
+      }
+    };
+
+    window.showProductSummary = async function(sellingId) {
+      try {
+        const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return alert('暂无订单');
+
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} ${entry.quantity} 顾客名字（${entry.user_name || '匿名'}）`).join('<br>');
+        alert(`【${sellingId} 订单详情】\n\n` + list.replace(/<br>/g, '\n'));
+      } catch (err) {
+        alert('读取详情失败：' + err.message);
       }
     };
   </script>
