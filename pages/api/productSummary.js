@@ -9,8 +9,8 @@ const db = getFirestore();
 
 // 标准化编号函数，例如 "a 32" → "A032"
 function normalizeSellingId(raw) {
-  const match = raw.match(/[a-zA-Z]\s*0*(\d{1,3})/);
-  if (!match) return raw;
+  const match = raw.match(/[a-zA-Z]\s*[-_~]*\s*0*(\d{1,3})/);
+  if (!match) return raw.trim().toUpperCase();
   const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
   const num = match[1].padStart(3, '0');
   return `${letter}${num}`;
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       .collection('triggered_comments')
       .where('selling_id', '==', normalizedId);
 
-    // 尝试加排序（如果没有索引，不影响主逻辑）
+    // 可选排序
     try {
       query = query.orderBy('created_at', 'asc');
     } catch (e) {
