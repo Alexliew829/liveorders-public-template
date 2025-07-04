@@ -161,10 +161,18 @@
           let html = `<div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
           html += `<div class="inline-buttons">`;
           for (const id in grouped) {
-            html += `<button class="action-button" onclick="showProductSummary('${id}')">${id}</button>`;
+            html += `<button class="action-button product-btn" data-id="${id}">${id}</button>`;
           }
           html += `</div>`;
           summaryBox.innerHTML = html;
+
+          // ✅ 添加点击监听，确保按钮有效
+          document.querySelectorAll('.product-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const id = btn.getAttribute('data-id');
+              showProductSummary(id);
+            });
+          });
         }
 
         const orderResults = document.getElementById('orderResults');
