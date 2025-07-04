@@ -76,7 +76,10 @@ export default async function handler(req, res) {
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      const stock = priceMatch[2] ? parseInt(priceMatch[2]) : null;
+      // ✅ 没写库存就默认为 1（只针对 A 类）
+      const stock = type === 'A'
+        ? (priceMatch[2] ? parseInt(priceMatch[2]) : 1)
+        : undefined;
 
       // ✅ 提取商品名
       let name = message;
@@ -92,7 +95,7 @@ export default async function handler(req, res) {
         raw_message: message,
         price_raw,
         price,
-        stock: type === 'A' ? stock : null, // ✅ 仅 A 类写入库存
+        ...(type === 'A' && { stock }), // ✅ 仅 A 类写入库存，未写则为 1
         created_at: new Date().toISOString(),
         post_id,
       });
