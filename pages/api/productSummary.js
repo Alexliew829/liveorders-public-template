@@ -20,7 +20,6 @@ export default async function handler(req, res) {
 
   try {
     const snapshot = await db.collection('triggered_comments')
-      .where('replied', '==', false)
       .where('selling_id', '>=', normalizedSID)
       .where('selling_id', '<=', normalizedSID + '\uf8ff')
       .get();
@@ -36,14 +35,19 @@ export default async function handler(req, res) {
         data.selling_id &&
         data.selling_id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === normalizedSID
       ) {
+        const priceRaw = data.price;
+        const priceNum = typeof priceRaw === 'string' ? parseFloat(priceRaw.replace(/,/g, '')) : priceRaw;
+
         result.push({
           user_name: data.user_name || '匿名顾客',
           selling_id: normalizedSID,
-          product_name: data.product_name || '',
+          price: priceNum || 0,
           quantity: parseInt(data.quantity) || 1
         });
       }
     });
+
+    result.sort((a, b) => a.user_name.localeCompare(b.user_name));
 
     return res.status(200).json(result);
   } catch (err) {
