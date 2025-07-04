@@ -18,6 +18,20 @@ function normalizeSellingId(raw) {
   return `${letter}${num}`;
 }
 
+// ✅ 提取留言中的数量，支持 +10 / x2 / *3 等格式
+function extractQuantity(message) {
+  let qty = 1;
+  const matches = message.match(/(?:[+xX*×－\-–])\s*(\d{1,3})/gi);
+  if (matches && matches.length > 0) {
+    const nums = matches.map(m => parseInt(m.replace(/[^\d]/g, ''))).filter(n => !isNaN(n));
+    if (nums.length > 0) {
+      const maxQty = Math.max(...nums);
+      if (maxQty > 0) qty = maxQty;
+    }
+  }
+  return qty;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '只允许 POST 请求' });
@@ -42,15 +56,7 @@ export default async function handler(req, res) {
 
     const selling_id = normalizeSellingId(match[0]);
     const prefix = selling_id[0];
-
-    let quantity = 1;
-    const qtyMatch = message.match(/[－\-–]\s*(\d{1,3})\b/);
-    if (qtyMatch) {
-      const parsedQty = parseInt(qtyMatch[1]);
-      if (!isNaN(parsedQty) && parsedQty > 0) {
-        quantity = parsedQty;
-      }
-    }
+    let quantity = extractQuantity(message);
 
     const productRef = db.collection('live_products').doc(selling_id);
     const productSnap = await productRef.get();
@@ -59,7 +65,6 @@ export default async function handler(req, res) {
     }
 
     const product = productSnap.data();
-
     const cleanPrice = typeof product.price === 'string'
       ? parseFloat(product.price.replace(/,/g, ''))
       : product.price || 0;
@@ -123,7 +128,7 @@ export default async function handler(req, res) {
       });
 
       return res.status(200).json({
-        message: quantity < (qtyMatch ? parseInt(qtyMatch[1]) : 1)
+        message: quantity < extractQuantity(message)
           ? `⚠️ 部分下单成功，仅写入剩余 ${quantity}`
           : '✅ A 类下单成功',
         doc_id: docId
