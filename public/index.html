@@ -87,22 +87,22 @@
       padding: 25px;
       border-radius: 12px;
       max-width: 90%;
+      margin: 40px auto;
+      transform: translateX(-16px); /* 左移一个字体宽度 */
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       font-size: 20px;
       text-align: left;
       line-height: 2.0;
       font-weight: bold;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
       z-index: 9999;
+      position: relative;
     }
     .popup-close {
       margin-top: 20px;
       text-align: center;
-      font-size: 22px;
-      color: #007bff;
+      font-size: 24px;
+      font-weight: bold;
+      color: red;
       cursor: pointer;
     }
   </style>
@@ -231,7 +231,7 @@
         const details = data.map(d => {
           const price = parseFloat(d.price) || 0;
           const quantity = parseInt(d.quantity) || 1;
-          const userName = (d.user_name || '匿名顾客').slice(0, 17);
+          const userName = (d.user_name || '匿名顾客').slice(0, 16);
           const id = d.selling_id || '';
           const bold = `<span style="color:red; font-weight:bold; font-size:24px;">RM${price.toFixed(2)} x ${quantity}</span>`;
           return `<div style="font-size:22px; white-space:nowrap; margin-bottom:6px;">${userName}　${id}　${bold}</div>`;
