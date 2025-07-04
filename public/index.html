@@ -84,19 +84,20 @@
     }
     .custom-popup {
       background: white;
-      padding: 20px;
+      padding: 25px;
       border-radius: 12px;
       max-width: 90%;
-      margin: 20px auto;
+      margin: 25px auto;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
-      font-size: 18px;
+      font-size: 20px;
       text-align: left;
-      line-height: 1.8;
+      line-height: 2.0;
+      font-weight: bold;
     }
     .popup-close {
-      margin-top: 15px;
+      margin-top: 20px;
       text-align: center;
-      font-size: 18px;
+      font-size: 20px;
       color: #007bff;
       cursor: pointer;
     }
@@ -217,13 +218,13 @@
         if (!Array.isArray(data)) return;
 
         const details = data.map(d => {
-          const bold = `<span style="color:red; font-weight:bold; font-size:19px">RM${d.price.toFixed(2)} x ${d.quantity}</span>`;
-          return `<div style="font-size:18px; white-space:nowrap">${d.user_name} ${d.selling_id} ${bold}</div>`;
+          const bold = `<span style="color:red; font-weight:bold; font-size:22px">RM${d.price.toFixed(2)} x ${d.quantity}</span>`;
+          return `<div style="font-size:20px; white-space:nowrap">${d.user_name} ${d.selling_id} ${bold}</div>`;
         }).join('');
 
         const popup = document.createElement('div');
         popup.className = 'custom-popup';
-        popup.innerHTML = `<strong>【${sellingId} 销售记录】</strong>${details}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
+        popup.innerHTML = `<strong style="font-size:22px">【${sellingId} 销售记录】</strong><div style="margin-top:12px">${details}</div><div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
         document.body.appendChild(popup);
       } catch (err) {
         alert('读取销售记录失败：' + err.message);
