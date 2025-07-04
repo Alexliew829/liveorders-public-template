@@ -11,8 +11,8 @@ const PAGE_ID = process.env.PAGE_ID;
 
 // ✅ 标准化编号，例如 a 32 → A032
 function normalizeSellingId(raw) {
-  const match = raw.match(/[a-zA-Z]\s*0*(\d{1,3})/);
-  if (!match) return raw;
+  const match = raw.match(/[a-zA-Z]\s*[-_~.～]*\s*0*(\d{1,3})/);
+  if (!match) return raw.trim().toUpperCase();
   const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
   const num = match[1].padStart(3, '0');
   return `${letter}${num}`;
