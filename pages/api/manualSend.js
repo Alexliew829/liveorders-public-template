@@ -125,8 +125,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
-    // ✅ 标记为已发送（除非 force 模式下不重复更新）
-    await commentSnap.ref.update({ replied_public: true });
+    // ✅ 成功发送后，更新该顾客所有留言为 replied_public: true
+    const batch = db.batch();
+    orderSnap.docs.forEach(doc => {
+      batch.update(doc.ref, { replied_public: true });
+    });
+    await batch.commit();
 
     return res.status(200).json({
       success: true,
