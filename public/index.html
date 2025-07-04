@@ -25,8 +25,8 @@
       align-items: center;
     }
     .action-button {
-      padding: 16px 30px;
-      font-size: 22px;
+      padding: 14px 28px;
+      font-size: 20px;
       background-color: #228B22;
       color: white;
       font-weight: bold;
@@ -66,7 +66,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin: 15px 0;
+      margin: 0 0 15px 0;
       justify-content: flex-start;
     }
     .inline-buttons .action-button {
@@ -74,6 +74,16 @@
       padding: 8px 12px;
       font-size: 14px;
       border-radius: 8px;
+    }
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .action-row .action-button {
+      flex: 1;
+      min-width: 140px;
     }
   </style>
 </head>
@@ -134,7 +144,13 @@
 
         const grouped = data.grouped || {};
         const uniqueSellingIds = Object.keys(grouped);
-        let headerHTML = `<strong>今日直播总销售额：RM${data.orders.reduce((sum, o) => sum + (o.total || 0), 0).toFixed(2)}</strong><br><br>`;
+
+        let grandTotal = 0;
+        for (const order of data.orders) {
+          grandTotal += order.total || 0;
+        }
+
+        let headerHTML = `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br>`;
         headerHTML += `<strong>📦 A类商品订单小结：</strong><div class="inline-buttons">`;
         for (const id of uniqueSellingIds) {
           headerHTML += `<button class="action-button" onclick="showProductSummary('${id}')">${id}</button>`;
@@ -149,15 +165,13 @@
           const message = order.message || '';
 
           html += `<strong>${user}</strong>`;
-          html += `<div class="message-box">感谢支持 ，你的订单详情🙏<br>${message.replace(/\n/g, '<br>')}<br><br>`;
-          html += `总金额：RM${order.total.toFixed(2)}<br>`;
-          html += `SGD${(order.total / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)<br><br>`;
-          html += `付款方式：<br>Lover Legend Adenium<br>Maybank：512389673060<br>Public Bank：3214928526<br><br>`;
-          html += `TNG 付款连接：<br>https://liveorders-public-template.vercel.app/TNG.jpg</div>`;
+          html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
 
+          html += `<div class="action-row">`;
           const sentLabel = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button><hr>`;
+          html += `<button class="action-button" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
+          html += `<button class="action-button" onclick="copyMessage(this)">复制并私发客户</button>`;
+          html += `</div><hr>`;
         }
 
         box.innerHTML = html;
@@ -167,7 +181,7 @@
     };
 
     window.copyMessage = function(btn) {
-      const messageBox = btn.previousElementSibling.previousElementSibling;
+      const messageBox = btn.closest('.message-box');
       const text = messageBox.innerText || messageBox.textContent;
       navigator.clipboard.writeText(text).then(() => {
         alert('已复制订单详情，可粘贴到 Messenger 私信顾客');
@@ -218,12 +232,12 @@
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return alert(`【${sellingId}】暂无订单`);
 
-        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} ${entry.price.toFixed(2)} x${entry.quantity} = RM${(entry.price * entry.quantity).toFixed(2)} 顾客（${entry.user_name || '匿名'}）`).join('\n');
         alert(`【${sellingId} 订单详情】\n\n` + list);
       } catch (err) {
         alert('读取详情失败：' + err.message);
       }
-    }
+    };
   </script>
 </body>
 </html>
