@@ -23,7 +23,7 @@
     }
     .action-button {
       padding: 10px 16px;
-      font-size: 15px;
+      font-size: 17px;
       background-color: #228B22;
       color: white;
       font-weight: bold;
@@ -156,10 +156,12 @@
           let repliedPublic = false;
 
           for (const item of userOrders) {
-            combinedMessage += `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${(item.price * item.quantity).toFixed(2)}\n`;
-            latestCommentId = item.comment_id;
-            repliedPublic = repliedPublic || item.replied_public;
-            grandTotal += (item.price || 0) * (item.quantity || 1);
+            if (item.selling_id && item.product_name && item.price && item.quantity) {
+              combinedMessage += `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${(item.price * item.quantity).toFixed(2)}\n`;
+              latestCommentId = item.comment_id;
+              repliedPublic = repliedPublic || item.replied_public;
+              grandTotal += (item.price || 0) * (item.quantity || 1);
+            }
           }
 
           html += `<strong>${user}</strong>`;
