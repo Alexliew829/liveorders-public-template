@@ -120,28 +120,25 @@
         let grandTotal = 0;
 
         for (const [user, userOrders] of Object.entries(groupedByUser)) {
-          let combinedMessage = '';
+          let userTotal = 0;
           let latestCommentId = '';
           let repliedPublic = false;
-          let userTotal = 0;
+          let messageLines = [];
 
-          const lines = [];
           for (const item of userOrders) {
-            if (item.message && item.message.startsWith('▪️')) {
-              lines.push(item.message);
-              const match = item.message.match(/=\s*RM(\d+\.\d{2})/);
-              if (match) userTotal += parseFloat(match[1]);
-            }
+            const match = item.message.match(/=\s*RM(\d+\.\d{2})/);
+            if (match) userTotal += parseFloat(match[1]);
+            messageLines.push(item.message);
             latestCommentId = item.comment_id;
             repliedPublic = repliedPublic || item.replied_public;
           }
+
           grandTotal += userTotal;
 
-          combinedMessage += `感谢支持 ，你的订单详情🙏\n` + lines.join('\n') + `\n\n总金额：${formatter.format(userTotal)}\n` +
-            `SGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
+          const message = `感谢支持 ，你的订单详情🙏\n${messageLines.join('\n')}\n\n总金额：${formatter.format(userTotal)}\nSGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
 
           html += `<strong>${user}</strong>`;
-          html += `<div class="message-box">${combinedMessage.replace(/\n/g, '<br>')}</div>`;
+          html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
 
           html += `<div class="order-actions">
             <button class="action-button" onclick="publicReply(this, '${latestCommentId}', ${repliedPublic})">
