@@ -82,23 +82,23 @@
       align-items: center;
       flex-wrap: wrap;
     }
-    #summaryBox {
-      position: fixed;
-      top: 20%;
-      left: 10%;
-      width: 80%;
+    .custom-popup {
       background: white;
-      border: 2px solid #888;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       padding: 20px;
-      font-size: 16px;
-      z-index: 1000;
-      display: none;
-    }
-    #summaryContent {
+      border-radius: 12px;
+      max-width: 90%;
+      margin: 20px auto;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      font-size: 18px;
       text-align: left;
       line-height: 1.8;
+    }
+    .popup-close {
+      margin-top: 15px;
+      text-align: center;
+      font-size: 18px;
+      color: #007bff;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -111,11 +111,6 @@
   </div>
   <div id="groupedOrders" class="orders"></div>
   <div id="orderResults"></div>
-
-  <div id="summaryBox">
-    <div id="summaryContent"></div>
-    <button onclick="document.getElementById('summaryBox').style.display='none'" style="margin-top: 15px;">关闭</button>
-  </div>
 
   <script>
     window.call = async function(api, isPost = false) {
@@ -221,12 +216,15 @@
         const data = await res.json();
         if (!Array.isArray(data)) return;
 
-        const content = [`<strong>【${sellingId} 销售记录】</strong><br><br>`];
-        data.forEach(d => {
-          content.push(`${d.user_name} ${d.selling_id} <span style="color:red;font-weight:bold;">RM${d.price.toFixed(2)} x ${d.quantity}</span>`);
-        });
-        document.getElementById('summaryContent').innerHTML = content.join('<br>');
-        document.getElementById('summaryBox').style.display = 'block';
+        const details = data.map(d => {
+          const bold = `<span style="color:red; font-weight:bold; font-size:19px">RM${d.price.toFixed(2)} x ${d.quantity}</span>`;
+          return `<div style="font-size:18px; white-space:nowrap">${d.user_name} ${d.selling_id} ${bold}</div>`;
+        }).join('');
+
+        const popup = document.createElement('div');
+        popup.className = 'custom-popup';
+        popup.innerHTML = `<strong>【${sellingId} 销售记录】</strong>${details}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
+        document.body.appendChild(popup);
       } catch (err) {
         alert('读取销售记录失败：' + err.message);
       }
