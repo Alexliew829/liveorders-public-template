@@ -24,12 +24,25 @@ export default async function handler(req, res) {
       rawOrders.push({ id: doc.id, ...data });
     });
 
-    // ✅ 整合为每个顾客一组
     const groupedByUser = {};
     const groupedProducts = {};
 
     for (const item of rawOrders) {
       const uid = item.user_id || item.user_name || item.comment_id;
+
+      const sidRaw = item.selling_id || '';
+      const normalizedSID = sidRaw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(); // 例如 A032、a 32、A-032
+
+      const qty = parseInt(item.quantity) || 1;
+      const price = parseFloat(item.price) || 0;
+      const subtotal = qty * price;
+
+      // 若字段缺失，跳过该留言
+      if (!item.product_name || isNaN(price) || !normalizedSID) {
+        console.warn('⚠️ 跳过不完整留言：', item);
+        continue;
+      }
+
       if (!groupedByUser[uid]) {
         groupedByUser[uid] = {
           user_name: item.user_name || '匿名顾客',
@@ -40,33 +53,30 @@ export default async function handler(req, res) {
         };
       }
 
-      const qty = item.quantity || 1;
-      const price = item.price || 0;
-      const subtotal = qty * price;
-
       groupedByUser[uid].items.push({
-        selling_id: item.selling_id,
+        selling_id: normalizedSID,
         product_name: item.product_name,
         quantity: qty,
         price,
         subtotal
       });
-      groupedByUser[uid].total += subtotal;
 
-      // ✅ 收集 grouped（A类订单小结）
-      const sid = (item.selling_id || '').toUpperCase();
-      if (/^A\d{1,3}$/.test(sid)) {
-        if (!groupedProducts[sid]) {
-          groupedProducts[sid] = [];
+      if (!isNaN(subtotal)) {
+        groupedByUser[uid].total += subtotal;
+      }
+
+      // ✅ 识别 A 类编号
+      if (/^A\d{1,3}$/.test(normalizedSID)) {
+        if (!groupedProducts[normalizedSID]) {
+          groupedProducts[normalizedSID] = [];
         }
-        groupedProducts[sid].push({
+        groupedProducts[normalizedSID].push({
           user_name: item.user_name || '匿名顾客',
           quantity: qty
         });
       }
     }
 
-    // ✅ 转换为数组用于前端渲染
     const orders = Object.values(groupedByUser).map(order => ({
       user_name: order.user_name,
       comment_id: order.comment_id,
@@ -76,6 +86,8 @@ export default async function handler(req, res) {
         `▪️ ${i.selling_id} ${i.product_name} x${i.quantity} = RM${(i.subtotal).toFixed(2)}`
       ).join('\n')
     }));
+
+    console.log('✅ 输出订单总数:', orders.length, 'A类商品种类:', Object.keys(groupedProducts).length);
 
     return res.status(200).json({ orders, grouped: groupedProducts });
 
