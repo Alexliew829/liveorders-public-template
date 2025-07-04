@@ -65,29 +65,22 @@ export default async function handler(req, res) {
     }
 
     const orders = Object.values(groupedByUser).map(order => {
-      const itemLines = order.items.map(i =>
+      const details = order.items.map(i =>
         `▪️ ${i.selling_id} ${i.product_name} ${i.price.toFixed(2)} x${i.quantity} = RM${i.subtotal.toFixed(2)}`
-      );
+      ).join('\n');
 
-      itemLines.push('',
-        `总金额：RM${order.total.toFixed(2)}`,
-        `SGD${(order.total / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)`,
-        '',
-        '付款方式：',
-        'Lover Legend Adenium',
-        'Maybank：512389673060',
-        'Public Bank：3214928526',
-        '',
-        'TNG 付款连接：',
-        'https://liveorders-public-template.vercel.app/TNG.jpg'
-      );
+      const sgd = (order.total / 3.25).toFixed(2);
+
+      const extra = `\n\n总金额：RM${order.total.toFixed(2)}\nSGD${sgd} PayLah! / PayNow me @87158951 (Siang)` +
+        `\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526` +
+        `\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
 
       return {
         user_name: order.user_name,
         comment_id: order.comment_id,
         replied_public: order.replied_public,
         total: order.total,
-        message: itemLines.join('\n')
+        message: `感谢支持 ，你的订单详情🙏\n${details}${extra}`
       };
     });
 
