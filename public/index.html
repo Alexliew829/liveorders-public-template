@@ -173,12 +173,41 @@
           const div = document.createElement('div');
           div.className = 'orders';
           const sortedMsg = sortItemsInMessage(order.message);
-          div.innerHTML = `<strong>${order.user_name}</strong><div class="message-box">${sortedMsg}</div>`;
+          div.innerHTML = `
+            <strong>${order.user_name}</strong>
+            <div class="message-box">${sortedMsg}</div>
+            <div style="margin-top: 10px; display: flex; gap: 12px;">
+              <button class="action-button" style="padding: 6px 12px; font-size: 14px;" onclick="sendPublic('${order.comment_id}')">公开留言发送付款资料</button>
+              <button class="action-button" style="padding: 6px 12px; font-size: 14px; background-color: #888;" onclick="copyMessage(this)">复制资料用于私发</button>
+            </div>
+          `;
           orderResults.appendChild(div);
         });
       } catch (err) {
         alert('显示订单失败：' + err.message);
       }
+    }
+
+    async function sendPublic(commentId) {
+      const confirmSend = confirm("⚠️ 是否确认再发送一次付款资料？");
+      if (!confirmSend) return;
+
+      const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ 已经发送到留言处！");
+      } else {
+        alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
+      }
+    }
+
+    function copyMessage(btn) {
+      const messageBox = btn.parentElement.previousElementSibling;
+      const text = messageBox.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerText = "✅ 已复制";
+        setTimeout(() => { btn.innerText = "复制资料用于私发"; }, 1500);
+      });
     }
   </script>
 </body>
