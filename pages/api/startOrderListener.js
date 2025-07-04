@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       await batch2.commit();
     }
 
-    // ✅ 更新最新 Post ID（增强容错）
+    // ✅ 更新最新 Post ID
     try {
       await configRef.set({ post_id });
     } catch (err) {
@@ -69,16 +69,20 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})\s*$/i);
+      // ✅ 提取价格与库存（如 RM32.32-200）
+      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})(?:[^0-9]*[-_~～. ]?(\d+))?\s*$/i);
       if (!priceMatch) continue;
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
+      const stock = priceMatch[2] ? parseInt(priceMatch[2]) : null;
+
+      // ✅ 提取商品名
       let name = message;
       name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
-      name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}\s*$/i, '');
-      name = name.trim().slice(0, 9);
+      name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}(?:[^0-9]*[-_~～. ]?\d+)?\s*$/i, '');
+      name = name.trim().slice(0, 30); // 最多30字
 
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
@@ -88,6 +92,7 @@ export default async function handler(req, res) {
         raw_message: message,
         price_raw,
         price,
+        stock: type === 'A' ? stock : null, // ✅ 仅 A 类写入库存
         created_at: new Date().toISOString(),
         post_id,
       });
