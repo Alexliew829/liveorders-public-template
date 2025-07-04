@@ -144,6 +144,7 @@
       });
 
       const fixed = sorted.join('\n');
+
       const restMatch = message.match(/SGD[\d\.]+ PayLah![\s\S]*/);
       const rest = restMatch ? restMatch[0] : '';
       const amountMatch = message.match(/总金额：RM[\d\.]+/);
@@ -156,6 +157,7 @@
       try {
         const res = await fetch('/api/pendingOrders');
         const data = await res.json();
+
         const grouped = data.grouped || {};
         const orders = data.orders || [];
 
@@ -178,36 +180,34 @@
           const div = document.createElement('div');
           div.className = 'orders';
           const sortedMsg = sortItemsInMessage(order.message);
-          const alreadySent = order.replied;
           div.innerHTML = `
             <strong>${order.user_name}</strong>
             <div class="message-box">${sortedMsg}</div>
             <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px;">
-              <button class="action-button" style="padding: 8px 16px; font-size: 16px; ${alreadySent ? 'background-color:#ccc' : ''}" ${alreadySent ? 'disabled' : ''} onclick="sendPublic(this, '${order.comment_id}', ${alreadySent})">
-                ${alreadySent ? '✅ 已发送' : '公开留言发送付款资料'}
-              </button>
+              <button class="action-button send-btn" data-id="${order.comment_id}" style="padding: 8px 16px; font-size: 16px;">公开发送付款资料</button>
               <button class="action-button" style="padding: 8px 16px; font-size: 16px; background-color: #888;" onclick="copyMessage(this)">私发复制</button>
             </div>
           `;
           orderResults.appendChild(div);
         });
+
+        document.querySelectorAll('.send-btn').forEach(btn => {
+          btn.onclick = async () => {
+            const confirmSend = confirm("⚠️ 已发送的留言不会重复发送，是否确认公开回复付款资料？");
+            if (!confirmSend) return;
+            const commentId = btn.dataset.id;
+            const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
+            const data = await res.json();
+            if (data.success) {
+              btn.innerText = "✅ 已发送";
+              btn.style.backgroundColor = '#999';
+            } else {
+              alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
+            }
+          };
+        });
       } catch (err) {
         alert('显示订单失败：' + err.message);
-      }
-    }
-
-    async function sendPublic(btn, commentId, alreadySent) {
-      if (alreadySent) return;
-      const confirmSend = confirm("⚠️ 已发送的留言不会重复发送，是否确认公开回复付款资料？");
-      if (!confirmSend) return;
-      const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
-      const data = await res.json();
-      if (data.success) {
-        btn.innerText = "✅ 已发送";
-        btn.disabled = true;
-        btn.style.backgroundColor = "#ccc";
-      } else {
-        alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
       }
     }
 
