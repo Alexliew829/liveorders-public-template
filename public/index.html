@@ -63,20 +63,12 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 10px;
     }
     .inline-buttons .action-button {
       width: auto;
       background: #555;
       padding: 10px 16px;
       font-size: 14px;
-    }
-    .order-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-weight: bold;
-      margin-bottom: 10px;
     }
   </style>
 </head>
@@ -164,15 +156,9 @@
           html += '<hr>';
         }
 
-        box.innerHTML = html;
-
-        // A类商品订单小结 + 总销售额
-        let groupHTML = `<div class="order-header">
-          <span>今日直播总销售额：${formatter.format(grandTotal)}</span>
-          <span>📦 A类商品订单小结：</span>
-        </div>
-        <div class="inline-buttons">`;
-
+        // 🟢 改：销售额上方显示
+        let groupHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
+        groupHTML += '<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">';
         const sellingIds = Object.keys(grouped);
         if (sellingIds.length === 0) {
           groupHTML += '暂无 A 类订单';
@@ -182,7 +168,7 @@
             groupHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
           }
         }
-        groupHTML += '</div>';
+        groupHTML += '</div></div>';
         groupBox.innerHTML = groupHTML;
 
       } catch (err) {
