@@ -72,8 +72,8 @@
     }
     .inline-buttons .action-button {
       width: auto;
-      padding: 8px 12px;
-      font-size: 15px;
+      padding: 10px 16px;
+      font-size: 16px;
       border-radius: 8px;
     }
     .top-summary {
@@ -143,9 +143,13 @@
         return numA - numB;
       });
 
-      const fixed = sorted.join('\n');
-      const totalAndPayment = message.match(/总金额：[\s\S]*?PayNow me @\d+/)?.[0] || '';
-      return `感谢支持 ，你的订单详情🙏\n${fixed}\n\n${totalAndPayment}`;
+      const sortedPart = sorted.join('\n');
+      const tngLine = message.match(/TNG.*?:.*?(https?:\/\/[^\s\n]+)/)?.[0] || '';
+      const sgdLine = message.match(/SGD\d+.*PayNow[^\n]*/)?.[0] || '';
+      const totalLine = message.match(/总金额：[^\n]+/)?.[0] || '';
+      const bankInfo = message.match(/付款方式：[\s\S]*?(?=TNG|SGD|$)/)?.[0] || '';
+
+      return `感谢支持，你的订单详情🙏\n${sortedPart}\n\n${totalLine}\n${bankInfo.trim()}\n\n${tngLine}\n${sgdLine}`;
     }
 
     async function showPendingOrders() {
@@ -178,9 +182,9 @@
           div.innerHTML = `
             <strong>${order.user_name}</strong>
             <div class="message-box">${sortedMsg}</div>
-            <div style="margin-top: 10px; display: flex; gap: 12px; flex-wrap: wrap;">
-              <button class="action-button" style="padding: 10px 18px; font-size: 16px;" onclick="sendPublic('${order.comment_id}')">公开留言发送付款资料</button>
-              <button class="action-button" style="padding: 10px 18px; font-size: 16px; background-color: #888;" onclick="copyMessage(this)">复制资料用于私发</button>
+            <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+              <button class="action-button" style="font-size: 17px;" onclick="sendPublic('${order.comment_id}', false)">公开留言发送付款资料</button>
+              <button class="action-button" style="background-color: #888; font-size: 17px;" onclick="copyMessage(this)">复制资料用于私发</button>
             </div>
           `;
           orderResults.appendChild(div);
@@ -190,14 +194,17 @@
       }
     }
 
-    async function sendPublic(commentId) {
-      const confirmSend = confirm("⚠️ 已发送过，是否确再发送？");
+    async function sendPublic(commentId, force = false) {
+      const confirmSend = confirm("⚠️ 已发送的留言不会重复发送，是否确认公开回复付款资料？");
       if (!confirmSend) return;
-
-      const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
+      const url = `/api/manualSend?comment_id=${commentId}${force ? '&force=yes' : ''}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
-        alert("✅ 已发送付款资料！");
+        alert("✅ 已发送公开留言！");
+      } else if (data.message?.includes('已发送过付款连接')) {
+        const retry = confirm("❗ 已经发送过，是否确认再次发送？");
+        if (retry) sendPublic(commentId, true);
       } else {
         alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
       }
