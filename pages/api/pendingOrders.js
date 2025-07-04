@@ -15,6 +15,7 @@ export default async function handler(req, res) {
       .get();
 
     const map = new Map();
+    const groupedAProducts = new Map();
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
           user_name,
           comment_id: data.comment_id || '',
           replied: data.replied || false,
-          replied_public: data.replied_public || false, // ✅ 新增字段
+          replied_public: data.replied_public || false,
           items: [item],
           total: subtotal
         });
@@ -56,19 +57,28 @@ export default async function handler(req, res) {
         existing.items.push(item);
         existing.total = +(existing.total + subtotal).toFixed(2);
       }
+
+      if (product.type === 'A') {
+        const aKey = `${data.selling_id}`;
+        if (!groupedAProducts.has(aKey)) groupedAProducts.set(aKey, []);
+        groupedAProducts.get(aKey).push({
+          user_name,
+          quantity
+        });
+      }
     }
 
     const result = Array.from(map.values()).map(order => {
       const itemLines = order.items.map(
-        item => `▪️ ${item.selling_id} ${item.product_name} ${item.quantity}x${item.price.toFixed(2)} = RM${item.subtotal.toFixed(2)}`
+        item => `▪️ ${item.selling_id} ${item.product_name} ${item.quantity}x${item.price.toLocaleString('en-MY', { minimumFractionDigits: 2 })} = RM${item.subtotal.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
       );
 
-      const sgd = (order.total / 3.25).toFixed(2);
+      const sgd = (order.total / 3.25).toLocaleString('en-MY', { minimumFractionDigits: 2 });
       const message = [
         `感谢你的支持 🙏 ，订单详情`,
         ...itemLines,
         '',
-        `总金额：RM${order.total.toFixed(2)}`,
+        `总金额：RM${order.total.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`,
         `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`,
         '',
         `付款方式：`,
@@ -86,7 +96,19 @@ export default async function handler(req, res) {
       };
     }).sort((a, b) => a.user_name.localeCompare(b.user_name));
 
-    res.status(200).json(result.slice(0, 100));
+    const grouped = {};
+    for (const [selling_id, orders] of groupedAProducts.entries()) {
+      const productDoc = await db.collection('live_products').doc(selling_id).get();
+      const product = productDoc.exists ? productDoc.data() : {};
+
+      grouped[selling_id] = {
+        selling_id,
+        product_name: product.product_name || '',
+        orders: orders.map(o => `${selling_id} ${product.product_name} ${o.quantity} ${o.user_name}`)
+      };
+    }
+
+    res.status(200).json({ result: result.slice(0, 100), grouped });
   } catch (err) {
     res.status(500).json({ error: '读取订单失败', detail: err.message });
   }
