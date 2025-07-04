@@ -142,7 +142,7 @@
           let html = `<div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
           html += `<div class="inline-buttons">`;
           for (const id in grouped) {
-            html += `<button class="action-button">${id}</button>`;
+            html += `<button class="action-button" onclick="showProductSummary('${id}')">${id}</button>`;
           }
           html += `</div>`;
           summaryBox.innerHTML = html;
@@ -190,6 +190,23 @@
         btn.innerText = "✅ 已复制";
         setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
       });
+    }
+
+    async function showProductSummary(sellingId) {
+      try {
+        const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+
+        const details = data.map(d => {
+          const bold = `<strong style="color:red">RM${d.price.toFixed(2)} x ${d.quantity}</strong>`;
+          return `${d.user_name}  ${d.selling_id}  ${bold}`;
+        }).join('<br>');
+
+        alert(`【${sellingId} 销售记录】\n` + details.replaceAll('<br>', '\n'));
+      } catch (err) {
+        alert('读取销售记录失败：' + err.message);
+      }
     }
   </script>
 </body>
