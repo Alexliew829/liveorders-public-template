@@ -48,11 +48,13 @@ export default async function handler(req, res) {
         product_name: item.product_name,
         quantity: qty,
         price,
-        subtotal
+        subtotal,
+        message: item.message || null  // ✅ 加入原始留言 message（如 "A32 +10"）
       });
+
       groupedByUser[uid].total += subtotal;
 
-      // A类订单小结
+      // ✅ A类订单小结
       const sid = (item.selling_id || '').toUpperCase();
       if (/^A\d{1,3}$/.test(sid)) {
         if (!groupedProducts[sid]) groupedProducts[sid] = [];
@@ -63,15 +65,20 @@ export default async function handler(req, res) {
       }
     }
 
-    const orders = Object.values(groupedByUser).map(order => ({
-      user_name: order.user_name,
-      comment_id: order.comment_id,
-      replied_public: order.replied_public,
-      total: order.total,
-      message: order.items.map(i =>
-        `▪️ ${i.selling_id} ${i.product_name} x${i.quantity} = RM${i.subtotal.toFixed(2)}`
-      ).join('\n')
-    }));
+    // ✅ 展开为每一笔订单（为配合前端 message 显示）
+    const orders = [];
+
+    for (const order of Object.values(groupedByUser)) {
+      for (const item of order.items) {
+        orders.push({
+          user_name: order.user_name,
+          comment_id: order.comment_id,
+          replied_public: order.replied_public,
+          total: order.total,
+          message: item.message || `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`
+        });
+      }
+    }
 
     return res.status(200).json({ orders, grouped: groupedProducts });
 
