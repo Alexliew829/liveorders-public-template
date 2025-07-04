@@ -132,7 +132,7 @@
         const box = document.getElementById('orderResults');
         const groupBox = document.getElementById('groupedOrders');
 
-        const orders = data.orders || data.result || [];
+        const orders = data.orders || [];
         const grouped = data.grouped || {};
 
         if (!Array.isArray(orders) || orders.length === 0) {
@@ -154,15 +154,21 @@
           let combinedMessage = '';
           let latestCommentId = '';
           let repliedPublic = false;
+          let userTotal = 0;
 
           for (const item of userOrders) {
-            if (item.selling_id && item.product_name && item.price && item.quantity) {
-              combinedMessage += `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${(item.price * item.quantity).toFixed(2)}\n`;
-              latestCommentId = item.comment_id;
-              repliedPublic = repliedPublic || item.replied_public;
-              grandTotal += (item.price || 0) * (item.quantity || 1);
+            if (item.message) {
+              combinedMessage += item.message + '\n';
+            } else if (item.selling_id && item.product_name && item.price && item.quantity) {
+              const subtotal = item.price * item.quantity;
+              combinedMessage += `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${subtotal.toFixed(2)}\n`;
             }
+            latestCommentId = item.comment_id;
+            repliedPublic = repliedPublic || item.replied_public;
+            userTotal += (item.price || 0) * (item.quantity || 1);
           }
+
+          grandTotal += userTotal;
 
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${combinedMessage.replace(/\n/g, '<br>')}</div>`;
