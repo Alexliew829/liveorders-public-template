@@ -25,15 +25,15 @@
       align-items: center;
     }
     .action-button {
-      padding: 14px 28px;
-      font-size: 20px;
+      padding: 16px 32px;
+      font-size: 22px;
       background-color: #228B22;
       color: white;
       font-weight: bold;
       border: none;
       border-radius: 12px;
       cursor: pointer;
-      width: 260px;
+      width: 280px;
       box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     .action-button:hover {
@@ -134,7 +134,12 @@
 
         const grouped = data.grouped || {};
         const uniqueSellingIds = Object.keys(grouped);
-        let headerHTML = `<strong>📦 A类商品订单小结：</strong><div class="inline-buttons">`;
+
+        let grandTotal = 0;
+        for (const order of data.orders) grandTotal += order.total || 0;
+
+        let headerHTML = `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br><br>`;
+        headerHTML += `<strong>📦 A类商品订单小结：</strong><div class="inline-buttons">`;
         for (const id of uniqueSellingIds) {
           headerHTML += `<button class="action-button" onclick="showProductSummary('${id}')">${id}</button>`;
         }
@@ -142,22 +147,18 @@
         groupBox.innerHTML = headerHTML;
 
         let html = '';
-        let grandTotal = 0;
-
         for (const order of data.orders) {
           const user = order.user_name || '匿名顾客';
           const message = order.message || '';
-          grandTotal += order.total || 0;
 
           html += `<strong>${user}</strong>`;
-          html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
+          html += `<div class="message-box">${message.replace(/(▪️\s+[A-Z]\d{3,4}\s+[^\d]*)(\d+(\.\d{1,2})?)\s*[x×X]\s*(\d+)/g, '$1$2 x$4 = RM' + (function(_, p1, p2, p3, qty) { return (parseFloat(p2) * parseInt(qty)).toFixed(2); }) )}</div>`;
 
           const sentLabel = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
           html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
           html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button><hr>`;
         }
 
-        html += `<strong>今日直播总销售额：RM${grandTotal.toFixed(2)}</strong><br><br>`;
         box.innerHTML = html;
       } catch (err) {
         alert('获取订单失败：' + err.message);
@@ -188,12 +189,8 @@
         });
 
         const result = await res.json();
-        if (result.success) {
-          btn.innerText = '✅ 已发送';
-        } else {
-          btn.innerText = '发送失败';
-          alert('错误：' + (result.error || '发送失败'));
-        }
+        btn.innerText = result.success ? '✅ 已发送' : '发送失败';
+        if (!result.success) alert('错误：' + (result.error || '发送失败'));
       } catch (err) {
         btn.innerText = '发送失败';
         alert('系统错误：' + err.message);
@@ -216,7 +213,7 @@
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return alert(`【${sellingId}】暂无订单`);
 
-        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} ${entry.price.toFixed(2)} x${entry.quantity} = RM${(entry.price * entry.quantity).toFixed(2)} 顾客（${entry.user_name || '匿名'}）`).join('\n');
         alert(`【${sellingId} 订单详情】\n\n` + list);
       } catch (err) {
         alert('读取详情失败：' + err.message);
