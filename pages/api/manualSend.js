@@ -58,8 +58,23 @@ export default async function handler(req, res) {
       const subtotal = +(price * qty).toFixed(2);
       total = +(total + subtotal).toFixed(2);
 
-      productLines.push(`▪️ ${selling_id} ${product_name} x${qty} = RM${subtotal.toFixed(2)}`);
+      // ✅ 明确列出：品名 + 单价 x 数量 = 小计
+      productLines.push({
+        selling_id,
+        line: `▪️ ${selling_id} ${product_name} ${price.toFixed(2)} x ${qty} = RM${subtotal.toFixed(2)}`
+      });
     }
+
+    // ✅ 商品排序（按 A/B + 编号排序）
+    productLines.sort((a, b) => {
+      const parseKey = (id) => {
+        const match = id.match(/^([A-Za-z]+)\s*0*(\d+)/);
+        return match ? [match[1].toUpperCase(), parseInt(match[2])] : [id, 0];
+      };
+      const [typeA, numA] = parseKey(a.selling_id);
+      const [typeB, numB] = parseKey(b.selling_id);
+      return typeA === typeB ? numA - numB : typeA.localeCompare(typeB);
+    });
 
     const totalStr = `总金额：RM${total.toFixed(2)}`;
     const sgd = (total / 3.25).toFixed(2);
@@ -67,7 +82,7 @@ export default async function handler(req, res) {
 
     const paymentMessage = [
       `感谢你的支持 🙏，订单详情`,
-      ...productLines,
+      ...productLines.map(p => p.line),
       '',
       totalStr,
       sgdStr,
@@ -79,11 +94,10 @@ export default async function handler(req, res) {
       '',
       'TNG 付款连接：',
       'https://liveorders-public-template.vercel.app/TNG.jpg',
-      '',
       '📸 付款后请截图发到后台：https://m.me/lover.legend.gardening'
     ].join('\n');
 
-    // ✅ 直接在留言处回复订单详情
+    // ✅ 公开回复留言
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
