@@ -64,15 +64,32 @@ export default async function handler(req, res) {
       }
     }
 
-    const orders = Object.values(groupedByUser).map(order => ({
-      user_name: order.user_name,
-      comment_id: order.comment_id,
-      replied_public: order.replied_public,
-      total: order.total,
-      message: order.items.map(i =>
-        `▪️ ${i.selling_id} ${i.product_name} x${i.quantity} = RM${i.subtotal.toFixed(2)}`
-      ).join('\n')
-    }));
+    const orders = Object.values(groupedByUser).map(order => {
+      const itemLines = order.items.map(i =>
+        `▪️ ${i.selling_id} ${i.product_name} ${i.price.toFixed(2)} x${i.quantity} = RM${i.subtotal.toFixed(2)}`
+      );
+
+      itemLines.push('',
+        `总金额：RM${order.total.toFixed(2)}`,
+        `SGD${(order.total / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)`,
+        '',
+        '付款方式：',
+        'Lover Legend Adenium',
+        'Maybank：512389673060',
+        'Public Bank：3214928526',
+        '',
+        'TNG 付款连接：',
+        'https://liveorders-public-template.vercel.app/TNG.jpg'
+      );
+
+      return {
+        user_name: order.user_name,
+        comment_id: order.comment_id,
+        replied_public: order.replied_public,
+        total: order.total,
+        message: itemLines.join('\n')
+      };
+    });
 
     return res.status(200).json({ orders, grouped: groupedProducts });
 
