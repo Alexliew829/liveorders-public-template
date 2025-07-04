@@ -41,7 +41,7 @@
     }
     .orders {
       max-width: 700px;
-      margin: 20px auto 10px auto;
+      margin: 10px auto;
       text-align: left;
       background: white;
       padding: 20px;
@@ -53,13 +53,13 @@
     .orders strong {
       font-size: 18px;
       display: block;
+      margin-bottom: 6px;
     }
     .message-box {
       background: #f0f0f0;
       border: 1px dashed #bbb;
       padding: 14px;
-      white-space: break-spaces;
-      margin-top: 5px;
+      white-space: normal;
       border-radius: 8px;
       font-size: 17px;
     }
@@ -67,8 +67,8 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
+      margin: 5px 0 10px 0;
       justify-content: flex-start;
-      margin-top: 5px;
     }
     .inline-buttons .action-button {
       width: auto;
@@ -76,22 +76,11 @@
       font-size: 15px;
       border-radius: 8px;
     }
-    .action-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .action-row .action-button {
-      flex: 1;
-      min-width: 140px;
-      font-size: 17px;
-    }
-    .summary-bar {
+    .top-summary {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      flex-wrap: wrap;
     }
   </style>
 </head>
@@ -103,7 +92,7 @@
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
   <div id="groupedOrders" class="orders"></div>
-  <div id="orderResults" class="orders"></div>
+  <div id="orderResults"></div>
 
   <script>
     window.call = async function(api, isPost = false) {
@@ -138,6 +127,25 @@
       }
     };
 
+    function sortItemsInMessage(message) {
+      const productRegex = /▪️\s*(A|B)\s*\d{1,3}[^▪️\n]+/g;
+      const matches = message.match(productRegex);
+      if (!matches) return message;
+
+      const sorted = matches.sort((a, b) => {
+        const extract = s => {
+          const m = s.match(/(A|B)\s*(\d+)/);
+          return [m[1], parseInt(m[2], 10)];
+        };
+        const [prefixA, numA] = extract(a);
+        const [prefixB, numB] = extract(b);
+        if (prefixA !== prefixB) return prefixA.localeCompare(prefixB);
+        return numA - numB;
+      });
+
+      return message.replace(productRegex, '').replace('🙏', '🙏 ' + sorted.join(' '));
+    }
+
     async function showPendingOrders() {
       try {
         const res = await fetch('/api/pendingOrders');
@@ -150,10 +158,9 @@
         summaryBox.innerHTML = '';
         if (Object.keys(grouped).length > 0) {
           let total = orders.reduce((sum, o) => sum + o.total, 0);
-          let html = `<div class="summary-bar"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
+          let html = `<div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
           html += `<div class="inline-buttons">`;
-          const sortedIds = Object.keys(grouped).sort();
-          for (const id of sortedIds) {
+          for (const id in grouped) {
             html += `<button class="action-button">${id}</button>`;
           }
           html += `</div>`;
@@ -165,8 +172,8 @@
         orders.forEach(order => {
           const div = document.createElement('div');
           div.className = 'orders';
-          const flatMsg = order.message.replace(/\n/g, ' ');
-          div.innerHTML = `<strong>${order.user_name}</strong><div class="message-box">${flatMsg}</div>`;
+          const sortedMsg = sortItemsInMessage(order.message);
+          div.innerHTML = `<strong>${order.user_name}</strong><div class="message-box">${sortedMsg}</div>`;
           orderResults.appendChild(div);
         });
       } catch (err) {
