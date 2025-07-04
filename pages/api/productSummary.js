@@ -7,12 +7,13 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 
-// 标准化编号函数，例如 "a 32" → "A032"
+// ✅ 更宽容的标准化编号函数，例如 "a_101"、"A 0101" → "A101"
 function normalizeSellingId(raw) {
-  const match = raw.match(/[a-zA-Z]\s*[-_~]*\s*0*(\d{1,3})/);
+  const cleaned = raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(); // 去除空格/符号并大写
+  const match = cleaned.match(/^([AB])0*(\d{1,3})$/i);
   if (!match) return raw.trim().toUpperCase();
-  const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
-  const num = match[1].padStart(3, '0');
+  const letter = match[1].toUpperCase();
+  const num = match[2].padStart(3, '0');
   return `${letter}${num}`;
 }
 
@@ -29,7 +30,7 @@ export default async function handler(req, res) {
       .collection('triggered_comments')
       .where('selling_id', '==', normalizedId);
 
-    // 可选排序
+    // 尝试排序（无索引则跳过）
     try {
       query = query.orderBy('created_at', 'asc');
     } catch (e) {
