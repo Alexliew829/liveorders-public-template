@@ -63,6 +63,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
+      margin-top: 5px;
     }
     .inline-buttons .action-button {
       width: auto;
@@ -156,21 +157,21 @@
           html += '<hr>';
         }
 
-        // 🟢 改：销售额上方显示
-        let groupHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
-        groupHTML += '<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">';
+        // ✅ 修改：将销售额与 A类按钮小结合并到上方显示，节省空间
+        let headerHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
+        headerHTML += `<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">`;
         const sellingIds = Object.keys(grouped);
         if (sellingIds.length === 0) {
-          groupHTML += '暂无 A 类订单';
+          headerHTML += '暂无 A 类订单';
         } else {
           for (const sid of sellingIds) {
-            const item = grouped[sid];
-            groupHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
+            headerHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
           }
         }
-        groupHTML += '</div></div>';
-        groupBox.innerHTML = groupHTML;
+        headerHTML += '</div></div><br>';
 
+        box.innerHTML = headerHTML + html;
+        groupBox.innerHTML = ''; // 清空原来的区域
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
