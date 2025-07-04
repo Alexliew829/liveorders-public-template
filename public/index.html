@@ -195,13 +195,13 @@
     }
 
     async function sendPublic(commentId) {
-      const confirmSend = confirm("⚠️ 已发送过，是否确认再发送付款资料？");
+      const confirmSend = confirm("⚠️ 已发送的留言不会重复发送，是否确认公开回复付款资料？");
       if (!confirmSend) return;
 
       const res = await fetch(`/api/manualSend?comment_id=${commentId}`);
       const data = await res.json();
       if (data.success) {
-        alert("✅ 已发送到留言处！");
+        alert("✅ 已发送公开留言！");
       } else {
         alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
       }
