@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       row.getCell(6).numFmt = '#,##0.00';
     }
 
-    const replied = orders[0].replied; // ✅ 统一判断一个顾客是否发送过
+    const replied = orders[0].replied_public; // ✅ 改为判断公开留言是否已发送
     const subtotalRow = sheet.addRow([
       '', '', '', subQty, '', subTotal,
       replied ? '✔' : '✘'  // ✅ 小计行才显示是否已发送
