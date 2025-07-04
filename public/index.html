@@ -166,12 +166,11 @@
           html += `</div>`;
           summaryBox.innerHTML = html;
 
-          // ✅ 添加点击监听，确保按钮有效
           document.querySelectorAll('.product-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const id = btn.getAttribute('data-id');
+            btn.onclick = () => {
+              const id = btn.dataset.id;
               showProductSummary(id);
-            });
+            };
           });
         }
 
@@ -203,7 +202,7 @@
             } else {
               alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
             }
-          }
+          };
         });
       } catch (err) {
         alert('显示订单失败：' + err.message);
