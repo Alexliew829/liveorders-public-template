@@ -57,12 +57,11 @@ export default async function handler(req, res) {
 
     const product = productSnap.data();
 
-    // ✅ 修改：清洗 price 字段为纯数字（防止含逗号或字符串）
+    // ✅ 清洗 price 字段为纯数字
     const cleanPrice = typeof product.price === 'string'
       ? parseFloat(product.price.replace(/,/g, ''))
       : product.price || 0;
 
-    // 准备写入 payload
     const payload = {
       post_id,
       comment_id,
@@ -78,7 +77,7 @@ export default async function handler(req, res) {
     };
 
     if (prefix === 'B') {
-      // B 类商品只允许第一人留言，且数量强制为 1
+      // ✅ B 类商品逻辑：限一人、数量强制为 1
       const docRef = db.collection('triggered_comments').doc(selling_id);
       if (!isForce) {
         const docSnap = await docRef.get();
@@ -90,7 +89,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '✅ B 类下单成功', doc_id: selling_id });
 
     } else {
-      // A 类商品允许多人留言，支持数量提取
+      // ✅ A 类商品逻辑：可多人下单，新增库存检查
       const docId = `${selling_id}_${comment_id}`;
       if (!isForce) {
         const existing = await db.collection('triggered_comments').doc(docId).get();
@@ -98,6 +97,26 @@ export default async function handler(req, res) {
           return res.status(200).json({ message: 'A 类订单已存在，跳过' });
         }
       }
+
+      const stock = product.stock || 0;
+      if (stock > 0) {
+        const querySnap = await db.collection('triggered_comments')
+          .where('selling_id', '==', selling_id)
+          .get();
+
+        let totalOrdered = 0;
+        querySnap.forEach(doc => {
+          const data = doc.data();
+          totalOrdered += parseInt(data.quantity) || 0;
+        });
+
+        if (totalOrdered + quantity > stock) {
+          return res.status(200).json({
+            message: `❌ 库存不足：目前已下单 ${totalOrdered}，剩余 ${stock - totalOrdered}`
+          });
+        }
+      }
+
       await db.collection('triggered_comments').doc(docId).set(payload);
       return res.status(200).json({ message: '✅ A 类下单成功', doc_id: docId });
     }
