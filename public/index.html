@@ -83,7 +83,7 @@
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
-    <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
+    <button class="action-button" onclick="window.location.href='/api/exportOrders'">导出订单 Excel</button>
   </div>
 
   <div id="groupedOrders" class="orders"></div>
@@ -98,8 +98,7 @@
         .then(res => res.json())
         .then(result => {
           if (result.success) {
-            const msg = url.includes('startOrderListener') ? '✅ 成功写入商品资料' : '✅ 操作成功';
-            alert(msg);
+            alert(url.includes('startOrderListener') ? '✅ 成功写入商品资料' : '✅ 操作成功');
             if (usePost) location.reload();
           } else {
             alert('❌ 操作失败：' + (result.error || '未知错误'));
@@ -145,9 +144,11 @@
           let messageLines = [];
 
           for (const item of userOrders) {
-            const match = item.message.match(/=\s*RM(\d+\.\d{2})/);
-            if (match) userTotal += parseFloat(match[1]);
-            messageLines.push(item.message);
+            const { product_name = '', price = 0, quantity = 1, selling_id = '' } = item;
+            const lineTotal = price * quantity;
+            userTotal += lineTotal;
+            const msg = `▪ ${selling_id} ${product_name} ${price.toFixed(2)} x ${quantity} = RM${lineTotal.toFixed(2)}`;
+            messageLines.push(msg);
             latestCommentId = item.comment_id;
             repliedPublic = repliedPublic || item.replied_public;
           }
@@ -210,23 +211,16 @@ https://liveorders-public-template.vercel.app/TNG.jpg`;
         const confirmSend = confirm('该顾客已公开留言发送过资料，确定要重新发送？');
         if (!confirmSend) return;
       }
-
       btn.innerText = '发送中...';
-
       try {
         const res = await fetch('/api/manualSend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ comment_id })
         });
-
         const result = await res.json();
-        if (result.success) {
-          btn.innerText = '✅ 已发送';
-        } else {
-          btn.innerText = '发送失败';
-          alert('错误：' + (result.error || '发送失败'));
-        }
+        btn.innerText = result.success ? '✅ 已发送' : '发送失败';
+        if (!result.success) alert('错误：' + (result.error || '发送失败'));
       } catch (err) {
         btn.innerText = '发送失败';
         alert('系统错误：' + err.message);
@@ -241,15 +235,12 @@ https://liveorders-public-template.vercel.app/TNG.jpg`;
         const num = match[1].padStart(3, '0');
         return `${letter}${num}`;
       };
-
       const sellingId = normalizeSellingId(sellingIdRaw);
-
       try {
         const res = await fetch(`/api/productSummary?selling_id=${encodeURIComponent(sellingId)}`);
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return alert(`【${sellingId}】暂无订单`);
-
-        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
+        const list = data.map(entry => `▪ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
         alert(`【${sellingId} 订单详情】\n\n` + list);
       } catch (err) {
         alert('读取详情失败：' + err.message);
