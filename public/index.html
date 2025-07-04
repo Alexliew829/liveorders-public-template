@@ -94,37 +94,6 @@
       currency: 'MYR'
     });
 
-    window.call = async function(api, isPost = false) {
-      try {
-        if (api.includes('exportOrders')) {
-          const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
-          const blob = await res.blob();
-          const today = new Date();
-          const day = String(today.getDate()).padStart(2, '0');
-          const month = String(today.getMonth() + 1).padStart(2, '0');
-          const year = String(today.getFullYear()).toString().slice(2);
-          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          return;
-        }
-
-        const res = await fetch(api, {
-          method: isPost ? 'POST' : 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        alert(data.message || JSON.stringify(data));
-      } catch (err) {
-        alert('错误：' + (err.message || '无法连接服务器'));
-      }
-    };
-
     window.showPendingOrders = async function () {
       try {
         const res = await fetch('/api/pendingOrders');
@@ -156,19 +125,20 @@
           let repliedPublic = false;
           let userTotal = 0;
 
+          const lines = [];
           for (const item of userOrders) {
-            if (item.message) {
-              combinedMessage += item.message + '\n';
-            } else if (item.selling_id && item.product_name && item.price && item.quantity) {
-              const subtotal = item.price * item.quantity;
-              combinedMessage += `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${subtotal.toFixed(2)}\n`;
+            if (item.message && item.message.startsWith('▪️')) {
+              lines.push(item.message);
+              const match = item.message.match(/=\s*RM(\d+\.\d{2})/);
+              if (match) userTotal += parseFloat(match[1]);
             }
             latestCommentId = item.comment_id;
             repliedPublic = repliedPublic || item.replied_public;
-            userTotal += (item.price || 0) * (item.quantity || 1);
           }
-
           grandTotal += userTotal;
+
+          combinedMessage += `感谢支持 ，你的订单详情🙏\n` + lines.join('\n') + `\n\n总金额：${formatter.format(userTotal)}\n` +
+            `SGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
 
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${combinedMessage.replace(/\n/g, '<br>')}</div>`;
@@ -178,9 +148,7 @@
               ${repliedPublic ? '✅ 已发送' : '公开留言发送付款资料'}
             </button>
             <button class="action-button" onclick="copyMessage(this)">复制私发客户</button>
-          </div>`;
-
-          html += '<hr>';
+          </div><hr>`;
         }
 
         let headerHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
