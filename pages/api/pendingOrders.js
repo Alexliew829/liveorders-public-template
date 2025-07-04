@@ -31,6 +31,7 @@ export default async function handler(req, res) {
         price: data.price || 0,
         comment_id: data.comment_id || '',
         replied: data.replied || false,
+        message: data.message || '', // ✅ 加入顾客留言内容
       });
     });
 
