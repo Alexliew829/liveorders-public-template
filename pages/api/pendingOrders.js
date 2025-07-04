@@ -1,89 +1,233 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
-if (!getApps().length) {
-  initializeApp({ credential: cert(serviceAccount) });
-}
-const db = getFirestore();
-
-export default async function handler(req, res) {
-  try {
-    const snapshot = await db.collection('triggered_comments')
-      .where('replied', '==', false)
-      .orderBy('created_at', 'asc')
-      .get();
-
-    if (snapshot.empty) {
-      return res.status(200).json({ orders: [], grouped: {} });
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>订单系统</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="订单系统">
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      padding-top: 20px;
     }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .action-button {
+      padding: 10px 16px;
+      font-size: 17px;
+      background-color: #228B22;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    }
+    .action-button:hover {
+      background-color: #1a6f1a;
+    }
+    .orders {
+      max-width: 700px;
+      margin: 0 auto 20px;
+      text-align: left;
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    .orders strong {
+      font-size: 17px;
+      display: block;
+    }
+    .message-box {
+      background: #f0f0f0;
+      border: 1px dashed #bbb;
+      padding: 10px;
+      white-space: pre-wrap;
+      margin-top: 10px;
+      border-radius: 8px;
+    }
+    .inline-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 5px;
+    }
+    .inline-buttons .action-button {
+      width: auto;
+      background: #555;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+    .order-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 8px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="button-container">
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
+    <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
+  </div>
+  <div id="groupedOrders" class="orders"></div>
+  <div id="orderResults" class="orders"></div>
 
-    const rawOrders = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      rawOrders.push({ id: doc.id, ...data });
+  <script>
+    const formatter = new Intl.NumberFormat('en-MY', {
+      style: 'currency',
+      currency: 'MYR'
     });
 
-    const groupedByUser = {};
-    const groupedProducts = {};
+    window.showPendingOrders = async function () {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+        const box = document.getElementById('orderResults');
+        const groupBox = document.getElementById('groupedOrders');
 
-    for (const item of rawOrders) {
-      const uid = item.user_id || item.user_name || item.comment_id;
-      if (!groupedByUser[uid]) {
-        groupedByUser[uid] = {
-          user_name: item.user_name || '匿名顾客',
-          comment_id: item.comment_id,
-          replied_public: item.replied_public || false,
-          items: [],
-          total: 0
-        };
+        const orders = data.orders || [];
+        const grouped = data.grouped || {};
+
+        if (!Array.isArray(orders) || orders.length === 0) {
+          box.innerHTML = '暂无待发订单';
+          return;
+        }
+
+        let groupedByUser = {};
+        for (const order of orders) {
+          const name = order.user_name || '匿名顾客';
+          if (!groupedByUser[name]) groupedByUser[name] = [];
+          groupedByUser[name].push(order);
+        }
+
+        let html = '';
+        let grandTotal = 0;
+
+        for (const [user, userOrders] of Object.entries(groupedByUser)) {
+          let combinedMessage = '';
+          let latestCommentId = '';
+          let repliedPublic = false;
+          let userTotal = 0;
+
+          const lines = [];
+          for (const item of userOrders) {
+            if (item.message && item.message.startsWith('▪️')) {
+              lines.push(item.message);
+              const match = item.message.match(/=\s*RM(\d+\.\d{2})/);
+              if (match) userTotal += parseFloat(match[1]);
+            }
+            latestCommentId = item.comment_id;
+            repliedPublic = repliedPublic || item.replied_public;
+          }
+          grandTotal += userTotal;
+
+          combinedMessage += `感谢支持 ，你的订单详情🙏\n` + lines.join('\n') + `\n\n总金额：${formatter.format(userTotal)}\n` +
+            `SGD${(userTotal / 3.25).toFixed(2)} PayLah! / PayNow me @87158951 (Siang)\n\n付款方式：\nLover Legend Adenium\nMaybank：512389673060\nPublic Bank：3214928526\n\nTNG 付款连接：\nhttps://liveorders-public-template.vercel.app/TNG.jpg`;
+
+          html += `<strong>${user}</strong>`;
+          html += `<div class="message-box">${combinedMessage.replace(/\n/g, '<br>')}</div>`;
+
+          html += `<div class="order-actions">
+            <button class="action-button" onclick="publicReply(this, '${latestCommentId}', ${repliedPublic})">
+              ${repliedPublic ? '✅ 已发送' : '公开留言发送付款资料'}
+            </button>
+            <button class="action-button" onclick="copyMessage(this)">复制私发客户</button>
+          </div><hr>`;
+        }
+
+        let headerHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
+        headerHTML += `<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">`;
+        const sellingIds = Object.keys(grouped);
+        if (sellingIds.length === 0) {
+          headerHTML += '暂无 A 类订单';
+        } else {
+          for (const sid of sellingIds) {
+            headerHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
+          }
+        }
+        headerHTML += '</div></div><br>';
+
+        box.innerHTML = headerHTML + html;
+        groupBox.innerHTML = '';
+      } catch (err) {
+        alert('获取订单失败：' + err.message);
       }
+    };
 
-      const qty = item.quantity || 1;
-      const price = item.price || 0;
-      const subtotal = qty * price;
-
-      groupedByUser[uid].items.push({
-        selling_id: item.selling_id,
-        product_name: item.product_name,
-        quantity: qty,
-        price,
-        subtotal,
-        message: item.message || null  // ✅ 加入原始留言 message（如 "A32 +10"）
+    window.copyMessage = function(btn) {
+      const messageBox = btn.parentElement.previousElementSibling;
+      const text = messageBox.innerText || messageBox.textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('已复制订单详情，可粘贴到 Messenger 私信顾客');
       });
+    };
 
-      groupedByUser[uid].total += subtotal;
-
-      // ✅ A类订单小结
-      const sid = (item.selling_id || '').toUpperCase();
-      if (/^A\d{1,3}$/.test(sid)) {
-        if (!groupedProducts[sid]) groupedProducts[sid] = [];
-        groupedProducts[sid].push({
-          user_name: item.user_name || '匿名顾客',
-          quantity: qty
-        });
+    window.publicReply = async function(btn, comment_id, alreadySent) {
+      if (alreadySent) {
+        const confirmSend = confirm('该顾客已公开留言发送过资料，确定要重新发送？');
+        if (!confirmSend) return;
       }
-    }
 
-    // ✅ 展开为每一笔订单（为配合前端 message 显示）
-    const orders = [];
+      btn.innerText = '发送中...';
 
-    for (const order of Object.values(groupedByUser)) {
-      for (const item of order.items) {
-        orders.push({
-          user_name: order.user_name,
-          comment_id: order.comment_id,
-          replied_public: order.replied_public,
-          total: order.total,
-          message: item.message || `▪️ ${item.selling_id} ${item.product_name} x${item.quantity} = RM${item.subtotal.toFixed(2)}`
+      try {
+        const res = await fetch('/api/manualSend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment_id })
         });
+
+        const result = await res.json();
+        if (result.success) {
+          btn.innerText = '✅ 已发送';
+        } else {
+          btn.innerText = '发送失败';
+          alert('错误：' + (result.error || '发送失败'));
+        }
+      } catch (err) {
+        btn.innerText = '发送失败';
+        alert('系统错误：' + err.message);
       }
-    }
+    };
 
-    return res.status(200).json({ orders, grouped: groupedProducts });
+    window.showProductSummary = async function(sellingIdRaw) {
+      const normalizeSellingId = (raw) => {
+        const match = raw.match(/[a-zA-Z]\s*0*(\d{1,3})/);
+        if (!match) return raw;
+        const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
+        const num = match[1].padStart(3, '0');
+        return `${letter}${num}`;
+      };
 
-  } catch (err) {
-    console.error('❌ 读取订单失败：', err);
-    return res.status(500).json({ error: '读取订单失败', details: err.message });
-  }
-}
+      const sellingId = normalizeSellingId(sellingIdRaw);
+
+      try {
+        const res = await fetch(`/api/productSummary?selling_id=${encodeURIComponent(sellingId)}`);
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return alert(`【${sellingId}】暂无订单`);
+
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
+        alert(`【${sellingId} 订单详情】\n\n` + list);
+      } catch (err) {
+        alert('读取详情失败：' + err.message);
+      }
+    };
+  </script>
+</body>
+</html>
