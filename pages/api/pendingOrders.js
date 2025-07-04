@@ -9,8 +9,8 @@ const db = getFirestore();
 
 // ✅ 标准化编号，例如 a-032、A 32 → A032
 function normalizeSellingId(id = '') {
-  const match = id.toUpperCase().match(/[A]\s*[-_~.～]*\s*0*(\d{1,3})/);
-  return match ? `A${match[1].padStart(3, '0')}` : id.toUpperCase();
+  const match = id.toUpperCase().match(/A\s*[-_~.\uff5e.]*\s*0*(\d{1,3})/);
+  return match ? A${match[1].padStart(3, '0')} : id.toUpperCase();
 }
 
 export default async function handler(req, res) {
@@ -28,11 +28,8 @@ export default async function handler(req, res) {
       const user_name = data.user_name || '匿名顾客';
 
       const normalizedId = normalizeSellingId(data.selling_id);
-      if (!normalizedId.startsWith('A')) continue; // 只处理 A 类
-
       const productDoc = await db.collection('live_products').doc(normalizedId).get();
       if (!productDoc.exists) continue;
-
       const product = productDoc.data();
       if (product.type !== 'A') continue;
 
@@ -51,7 +48,7 @@ export default async function handler(req, res) {
         subtotal
       };
 
-      const key = normalizedId;
+      const key = ${normalizedId};
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key).push({ ...item, user_name });
     }
@@ -61,7 +58,7 @@ export default async function handler(req, res) {
       result.push({
         selling_id,
         product_name: orders[0].product_name,
-        orders: orders.map(o => `${selling_id} ${o.product_name} ${o.quantity} ${o.user_name}`)
+        orders: orders.map(o => ${selling_id} ${o.product_name} ${o.quantity} ${o.user_name})
       });
     }
 
