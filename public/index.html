@@ -12,39 +12,36 @@
       font-family: sans-serif;
       background-color: #f7f7f7;
       text-align: center;
-      padding-top: 60px;
-    }
-    .icon {
-      width: 120px;
-      margin-bottom: 40px;
+      padding-top: 20px;
     }
     .button-container {
       display: flex;
       flex-direction: column;
-      gap: 30px;
+      gap: 20px;
       align-items: center;
+      margin-bottom: 20px;
     }
     .action-button {
-      padding: 14px 28px;
-      font-size: 18px;
+      padding: 12px 24px;
+      font-size: 16px;
       background-color: #228B22;
       color: white;
       font-weight: bold;
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
       cursor: pointer;
-      width: 260px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      width: 240px;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
     }
     .action-button:hover {
       background-color: #1a6f1a;
     }
     .orders {
       max-width: 700px;
-      margin: 30px auto;
+      margin: 0 auto 30px;
       text-align: left;
       background: white;
-      padding: 20px;
+      padding: 16px;
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       font-size: 15px;
@@ -57,7 +54,7 @@
     .message-box {
       background: #f0f0f0;
       border: 1px dashed #bbb;
-      padding: 12px;
+      padding: 10px;
       white-space: pre-wrap;
       margin-top: 10px;
       border-radius: 8px;
@@ -71,12 +68,11 @@
       width: auto;
       background: #555;
       padding: 10px 16px;
-      font-size: 16px;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
-  <img src="apple-touch-icon.png" alt="PAYMENT Icon" class="icon" />
   <div class="button-container">
     <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品资料</button>
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
@@ -163,14 +159,15 @@
         html += `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong><br><br>`;
         box.innerHTML = html;
 
+        // A类商品订单列表
         let groupHTML = '<h3>📦 A类商品订单小结：</h3><div class="inline-buttons">';
         const sellingIds = Object.keys(grouped);
         if (sellingIds.length === 0) {
           groupHTML += '暂无 A 类订单';
         } else {
           for (const sid of sellingIds) {
-            const normalizedId = sid.replace(/\s+/g, '').toUpperCase().replace(/^([A-Z])(?=\d)/, (_, l) => l);
-            groupHTML += `<button class="action-button" onclick="showProductSummary('${normalizedId}')">${sid}</button>`;
+            const item = grouped[sid];
+            groupHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
           }
         }
         groupHTML += '</div>';
