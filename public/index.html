@@ -132,16 +132,12 @@
         const box = document.getElementById('orderResults');
         const groupBox = document.getElementById('groupedOrders');
 
-        if (!data || (!Array.isArray(data.result) && typeof data.grouped !== 'object')) {
-          box.innerHTML = '暂无待发订单';
-          return;
-        }
-
-        const orders = data.result || [];
+        const orders = data.orders || data.result || [];
         const grouped = data.grouped || {};
 
-        if (orders.length === 0) {
+        if (!Array.isArray(orders) || orders.length === 0) {
           box.innerHTML = '暂无待发订单';
+          return;
         }
 
         let html = '';
@@ -150,7 +146,7 @@
         for (const order of orders) {
           const user = order.user_name || '匿名顾客';
           const message = order.message || '';
-          grandTotal += order.total || 0;
+          grandTotal += order.total || (order.quantity || 1) * (order.price || 0);
 
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
