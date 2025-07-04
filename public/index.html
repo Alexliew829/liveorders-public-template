@@ -85,18 +85,21 @@
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
+
   <div id="groupedOrders" class="orders"></div>
   <div id="orderResults" class="orders"></div>
 
   <script>
-    // ✅ 修复 call() 未定义的问题
-    function call(url, reload = false) {
-      fetch(url)
+    // ✅ 正确处理 GET / POST 请求
+    function call(url, usePost = false) {
+      const options = usePost
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+        : {};
+      fetch(url, options)
         .then(res => res.json())
         .then(result => {
           if (result.success) {
             alert('✅ 操作成功');
-            if (reload) location.reload();
           } else {
             alert('❌ 操作失败：' + (result.error || '未知错误'));
           }
@@ -166,7 +169,6 @@ https://liveorders-public-template.vercel.app/TNG.jpg`;
 
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
-
           html += `<div class="order-actions">
             <button class="action-button" onclick="publicReply(this, '${latestCommentId}', ${repliedPublic})">
               ${repliedPublic ? '✅ 已发送' : '公开留言发送付款资料'}
