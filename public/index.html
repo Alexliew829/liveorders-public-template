@@ -22,15 +22,14 @@
       margin-bottom: 20px;
     }
     .action-button {
-      padding: 12px 24px;
-      font-size: 16px;
+      padding: 10px 16px;
+      font-size: 15px;
       background-color: #228B22;
       color: white;
       font-weight: bold;
       border: none;
-      border-radius: 10px;
+      border-radius: 8px;
       cursor: pointer;
-      width: 240px;
       box-shadow: 0 3px 6px rgba(0,0,0,0.2);
     }
     .action-button:hover {
@@ -38,7 +37,7 @@
     }
     .orders {
       max-width: 700px;
-      margin: 0 auto 30px;
+      margin: 0 auto 20px;
       text-align: left;
       background: white;
       padding: 16px;
@@ -68,8 +67,15 @@
     .inline-buttons .action-button {
       width: auto;
       background: #555;
-      padding: 10px 16px;
+      padding: 8px 12px;
       font-size: 14px;
+    }
+    .order-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 8px;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -149,15 +155,16 @@
           html += `<strong>${user}</strong>`;
           html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
 
-          const sentLabel = order.replied_public ? '✅ 已发送' : '公开留言发送付款资料';
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">${sentLabel}</button>`;
-
-          html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button>`;
+          html += `<div class="order-actions">
+            <button class="action-button" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">
+              ${order.replied_public ? '✅ 已发送' : '公开留言发送付款资料'}
+            </button>
+            <button class="action-button" onclick="copyMessage(this)">复制私发客户</button>
+          </div>`;
 
           html += '<hr>';
         }
 
-        // ✅ 修改：将销售额与 A类按钮小结合并到上方显示，节省空间
         let headerHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
         headerHTML += `<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">`;
         const sellingIds = Object.keys(grouped);
@@ -171,14 +178,14 @@
         headerHTML += '</div></div><br>';
 
         box.innerHTML = headerHTML + html;
-        groupBox.innerHTML = ''; // 清空原来的区域
+        groupBox.innerHTML = '';
       } catch (err) {
         alert('获取订单失败：' + err.message);
       }
     };
 
     window.copyMessage = function(btn) {
-      const messageBox = btn.previousElementSibling.previousElementSibling;
+      const messageBox = btn.parentElement.previousElementSibling;
       const text = messageBox.innerText || messageBox.textContent;
       navigator.clipboard.writeText(text).then(() => {
         alert('已复制订单详情，可粘贴到 Messenger 私信顾客');
