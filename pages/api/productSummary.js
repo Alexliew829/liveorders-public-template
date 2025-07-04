@@ -7,23 +7,33 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 
+// 标准化编号函数，例如 "a 32" → "A032"
+function normalizeSellingId(raw) {
+  const match = raw.match(/[a-zA-Z]\s*0*(\d{1,3})/);
+  if (!match) return raw;
+  const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
+  const num = match[1].padStart(3, '0');
+  return `${letter}${num}`;
+}
+
 export default async function handler(req, res) {
   const { selling_id } = req.query;
   if (!selling_id) {
     return res.status(400).json({ error: '缺少 selling_id 参数' });
   }
 
+  const normalizedId = normalizeSellingId(selling_id);
+
   try {
-    // 默认不排序，避免无索引时报错
     let query = db
       .collection('triggered_comments')
-      .where('selling_id', '==', selling_id);
+      .where('selling_id', '==', normalizedId);
 
-    // 尝试加排序，如果没有建立索引则略过
+    // 尝试加排序（如果没有索引，不影响主逻辑）
     try {
       query = query.orderBy('created_at', 'asc');
     } catch (e) {
-      console.warn('未建立索引，已跳过排序 created_at');
+      console.warn('未建立索引，跳过排序 created_at');
     }
 
     const snapshot = await query.get();
