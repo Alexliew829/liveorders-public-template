@@ -103,7 +103,7 @@
           const day = String(today.getDate()).padStart(2, '0');
           const month = String(today.getMonth() + 1).padStart(2, '0');
           const year = String(today.getFullYear()).toString().slice(2);
-          const filename = ${day}-${month}-${year} Bonsai-Order.xlsx;
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -152,27 +152,27 @@
           const message = order.message || '';
           grandTotal += order.total || 0;
 
-          html += <strong>${user}</strong>;
-          html += <div class="message-box">${message.replace(/\n/g, '<br>')}</div>;
+          html += `<strong>${user}</strong>`;
+          html += `<div class="message-box">${message.replace(/\n/g, '<br>')}</div>`;
 
-          html += <div class="order-actions">
+          html += `<div class="order-actions">
             <button class="action-button" onclick="publicReply(this, '${order.comment_id}', ${order.replied_public})">
               ${order.replied_public ? '✅ 已发送' : '公开留言发送付款资料'}
             </button>
             <button class="action-button" onclick="copyMessage(this)">复制私发客户</button>
-          </div>;
+          </div>`;
 
           html += '<hr>';
         }
 
-        let headerHTML = <strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>;
-        headerHTML += <div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">;
+        let headerHTML = `<strong>今日直播总销售额：${formatter.format(grandTotal)}</strong>`;
+        headerHTML += `<div><h3>📦 A类商品订单小结：</h3><div class="inline-buttons">`;
         const sellingIds = Object.keys(grouped);
         if (sellingIds.length === 0) {
           headerHTML += '暂无 A 类订单';
         } else {
           for (const sid of sellingIds) {
-            headerHTML += <button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>;
+            headerHTML += `<button class="action-button" onclick="showProductSummary('${sid}')">${sid}</button>`;
           }
         }
         headerHTML += '</div></div><br>';
@@ -226,18 +226,18 @@
         if (!match) return raw;
         const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
         const num = match[1].padStart(3, '0');
-        return ${letter}${num};
+        return `${letter}${num}`;
       };
 
       const sellingId = normalizeSellingId(sellingIdRaw);
 
       try {
-        const res = await fetch(/api/productSummary?selling_id=${encodeURIComponent(sellingId)});
+        const res = await fetch(`/api/productSummary?selling_id=${encodeURIComponent(sellingId)}`);
         const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) return alert(【${sellingId}】暂无订单);
+        if (!Array.isArray(data) || data.length === 0) return alert(`【${sellingId}】暂无订单`);
 
-        const list = data.map(entry => ▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）).join('\n');
-        alert(【${sellingId} 订单详情】\n\n + list);
+        const list = data.map(entry => `▪️ ${entry.selling_id} ${entry.product_name} x${entry.quantity} 顾客（${entry.user_name || '匿名'}）`).join('\n');
+        alert(`【${sellingId} 订单详情】\n\n` + list);
       } catch (err) {
         alert('读取详情失败：' + err.message);
       }
