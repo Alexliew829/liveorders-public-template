@@ -9,6 +9,15 @@ if (!getApps().length) {
 const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
+// ✅ 标准化编号，例如 a 32 → A032
+function normalizeSellingId(raw) {
+  const match = raw.match(/[a-zA-Z]\s*0*(\d{1,3})/);
+  if (!match) return raw;
+  const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
+  const num = match[1].padStart(3, '0');
+  return `${letter}${num}`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '只允许 POST 请求' });
@@ -31,9 +40,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '无有效商品编号，跳过处理' });
     }
 
-    const prefix = match[0][0].toUpperCase();
-    const number = match[1].padStart(3, '0');
-    const selling_id = `${prefix}${number}`;
+    const selling_id = normalizeSellingId(match[0]);
+    const prefix = selling_id[0];
 
     let quantity = 1;
     const qtyMatch = message.match(/[－\-–]\s*(\d{1,3})\b/);
@@ -105,7 +113,7 @@ export default async function handler(req, res) {
             message: `❌ 已售罄，库存为 ${stock}，当前已下单 ${totalOrdered}`
           });
         } else if (totalOrdered + quantity > stock) {
-          quantity = stock - totalOrdered; // 剩余库存
+          quantity = stock - totalOrdered;
         }
       }
 
