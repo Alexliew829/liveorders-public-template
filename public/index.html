@@ -71,8 +71,8 @@
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
     <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
+  <div id="groupedOrders" class="orders"></div> <!-- ⬅️ 调整到上方 -->
   <div id="orderResults" class="orders"></div>
-  <div id="groupedOrders" class="orders"></div>
 
   <script>
     const formatter = new Intl.NumberFormat('en-MY', {
