@@ -62,14 +62,6 @@
       margin-top: 10px;
       border-radius: 8px;
     }
-    .a-product-summary {
-      background: #fff;
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin: 5px 0 10px;
-      font-size: 14px;
-      border-radius: 8px;
-    }
   </style>
 </head>
 <body>
@@ -144,9 +136,14 @@
 
           html += `<button class="action-button" style="margin-top: 10px;" onclick="copyMessage(this)">复制并私发客户</button>`;
 
-          // 如果是 A 类商品，加入查看库存按钮
-          if (order.items?.[0]?.selling_id?.startsWith('A')) {
-            html += `<button class="action-button" style="margin-top: 10px; background-color: #555;" onclick="showProductSummary('${order.items[0].selling_id}')">查看 ${order.items[0].selling_id} 库存详情</button>`;
+          // 如果包含多项 A 类商品，列出按钮
+          const aItems = (order.items || []).filter(item => item.selling_id?.startsWith('A'));
+          const shown = new Set();
+          for (const a of aItems) {
+            if (!shown.has(a.selling_id)) {
+              html += `<button class="action-button" style="margin-top: 10px; background:#555" onclick="showProductSummary('${a.selling_id}')">查看 ${a.selling_id} 订单详情</button>`;
+              shown.add(a.selling_id);
+            }
           }
 
           html += '<hr>';
