@@ -87,7 +87,8 @@ export default async function handler(req, res) {
     });
 
     // ✅ 简化公开留言内容
-    const paymentMessage = `🙏 感谢你的支持\n📩 已发送付款详情，请查阅 Inbox\nm.me/lover.legend.gardening`;
+   const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬 付款连接：https://m.me/lover.legend.gardening`;
+`;
 
 
     // ✅ 留言公开回复付款详情
