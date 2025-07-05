@@ -193,7 +193,7 @@
 
         const orderResults = document.getElementById('orderResults');
         orderResults.innerHTML = '';
-        orders.forEach(order => {
+        orders.sort((a, b) => (a.user_name || '').localeCompare(b.user_name || '')).forEach(order => {
           const div = document.createElement('div');
           div.className = 'orders';
           div.innerHTML = `
