@@ -101,18 +101,17 @@
       overflow-y: auto;
       color: red;
     }
-    .popup-close {
-      margin-top: 20px;
-      text-align: center;
-      font-size: 26px;
-      font-weight: bold;
-      color: red;
-      cursor: pointer;
-    }
-    .popup-copied {
-      font-size: 18px;
-      color: green;
-      margin-top: 10px;
+    .popup-tip {
+      position: fixed;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: black;
+      color: white;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 16px;
+      z-index: 10000;
     }
   </style>
 </head>
@@ -127,16 +126,15 @@
   <div id="orderResults"></div>
 
   <script>
-    function showCustomPopup(message) {
-      const existing = document.querySelector('.custom-popup');
-      if (existing) existing.remove();
-      const popup = document.createElement('div');
-      popup.className = 'custom-popup';
-      popup.innerHTML = `${message}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
-      document.body.appendChild(popup);
+    function showCopyTip() {
+      const tip = document.createElement('div');
+      tip.className = 'popup-tip';
+      tip.innerText = '✅ 已复制';
+      document.body.appendChild(tip);
+      setTimeout(() => tip.remove(), 1500);
     }
 
-    window.call = async function(api, isPost = false) {
+    async function call(api, isPost = false) {
       try {
         const isExport = api.includes('exportOrders');
         const res = await fetch(api, {
@@ -147,10 +145,7 @@
         if (isExport) {
           const blob = await res.blob();
           const today = new Date();
-          const day = String(today.getDate()).padStart(2, '0');
-          const month = String(today.getMonth() + 1).padStart(2, '0');
-          const year = String(today.getFullYear()).toString().slice(2);
-          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const filename = `${today.getDate().toString().padStart(2,'0')}-${(today.getMonth()+1).toString().padStart(2,'0')}-${today.getFullYear().toString().slice(2)} Bonsai-Order.xlsx`;
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -166,11 +161,12 @@
       } catch (err) {
         alert('错误：' + (err.message || '无法连接服务器'));
       }
-    };
+    }
 
     async function showPendingOrders() {
       const res = await fetch('/api/pendingOrders');
       const data = await res.json();
+
       const grouped = data.grouped || {};
       const orders = data.orders || [];
 
@@ -205,6 +201,26 @@
           </div>`;
         orderResults.appendChild(div);
       });
+
+      document.querySelectorAll('.send-btn').forEach(btn => {
+        btn.onclick = async () => {
+          const sentBefore = btn.dataset.sent === 'true';
+          const parent = btn.closest('.orders');
+          const copied = parent.dataset.copied;
+          if (!copied) return alert('⚠️ 请先私发复制订单明细给顾客');
+          if (sentBefore && !confirm('⚠️ 已发送过，确定再次发送？')) return;
+
+          const commentId = btn.dataset.id;
+          const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
+          const data = await res.json();
+          if (data.success) {
+            btn.innerText = "✅ 已发送";
+            btn.dataset.sent = 'true';
+          } else {
+            alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
+          }
+        };
+      });
     }
 
     function copyMessage(btn) {
@@ -214,9 +230,8 @@
       const name = parent.querySelector('strong')?.innerText || '顾客';
       const fullText = `${name}\n${text}`;
       navigator.clipboard.writeText(fullText).then(() => {
-        btn.innerText = "✅ 已复制";
         parent.dataset.copied = "yes";
-        setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
+        showCopyTip();
       });
     }
 
@@ -224,28 +239,24 @@
       const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
       const data = await res.json();
       if (!Array.isArray(data)) return;
+
       let totalQty = 0;
-      let copyText = `【${sellingId} 销售记录】\n`;
-      const details = data.map(d => {
+      const detailLines = data.map(d => {
         const price = parseFloat(d.price) || 0;
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
-        const userName = (d.user_name || '匿名顾客').slice(0, 14);
-        const id = d.selling_id || '';
-        const line = `${userName} ${id} RM${price.toFixed(2)} x ${quantity}`;
-        copyText += line + '\n';
-        return `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${line}</div>`;
-      }).join('');
-
-      copyText += `📌 总数：${totalQty} 份`;
+        const name = (d.user_name || '匿名顾客').slice(0, 14);
+        return `${name}　${sellingId}　RM${price.toFixed(2)} x ${quantity}`;
+      });
+      const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
 
       const popup = document.createElement('div');
       popup.className = 'custom-popup';
       popup.innerHTML = `
         <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
-        <div style="margin-top:12px">${details}</div>
+        <div style="margin-top:12px; text-align:left; font-size:20px; white-space:pre-wrap">${detailLines.join('\n')}</div>
         <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
-        <button class="action-button" style="margin-top:12px; font-size:18px;" onclick="navigator.clipboard.writeText(\`${copyText}\`).then(() => alert('✅ 已复制'))">复制</button>
+        <button class="action-button" style="margin-top:16px; background:#444;" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
         <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
       `;
       document.body.appendChild(popup);
