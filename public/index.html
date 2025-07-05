@@ -114,27 +114,19 @@
 <body>
   <img src="apple-touch-icon.png" alt="抓单系统" class="icon" />
   <div class="button-container">
-    <button class="action-button" onclick="recordProducts()">记录商品资料</button>
+    <button class="action-button" onclick="call('/api/startOrderListener', true)">记录商品详情</button>
     <button class="action-button" onclick="showPendingOrders()">显示待发订单</button>
-    <button class="action-button" onclick="exportOrders()">导出订单 Excel</button>
+    <button class="action-button" onclick="call('/api/exportOrders')">导出订单 Excel</button>
   </div>
   <div id="groupedOrders" class="orders"></div>
   <div id="orderResults"></div>
 
   <script>
-    function showCustomPopup(message) {
-      const existing = document.querySelector('.custom-popup');
-      if (existing) existing.remove();
-      const popup = document.createElement('div');
-      popup.className = 'custom-popup';
-      popup.innerHTML = `${message}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
-      document.body.appendChild(popup);
-    }
-
     function copySummaryText() {
-      const popupText = document.querySelector('.custom-popup')?.innerText;
-      if (!popupText) return alert("找不到内容");
-      navigator.clipboard.writeText(popupText).then(() => {
+      const popup = document.querySelector('.custom-popup');
+      if (!popup) return alert("找不到弹窗内容");
+      const text = popup.innerText;
+      navigator.clipboard.writeText(text).then(() => {
         alert("✅ 已复制销售记录！");
       });
     }
@@ -171,17 +163,6 @@
       } catch (err) {
         alert('读取销售记录失败：' + err.message);
       }
-    }
-
-    // ✅ 修复按钮功能的定义（原 call 函数已不存在）
-    async function recordProducts() {
-      await fetch('/api/startOrderListener', { method: 'POST' });
-      alert('✅ 已记录商品资料');
-    }
-
-    async function exportOrders() {
-      await fetch('/api/exportOrders');
-      alert('✅ 订单已导出');
     }
   </script>
 </body>
