@@ -190,7 +190,7 @@
             <strong>${order.user_name}</strong>
             <div class="message-box">${order.message}</div>
             <div class="inline-buttons">
-              <button class="action-button send-btn" data-id="${order.comment_id}">公开发送</button>
+              <button class="action-button send-btn" data-id="${order.comment_id}" data-sent="${order.replied_public ? 'true' : 'false'}">公开发送</button>
               <button class="action-button" style="background-color:#888;" onclick="copyMessage(this)">私发复制</button>
             </div>
           `;
@@ -199,13 +199,17 @@
 
         document.querySelectorAll('.send-btn').forEach(btn => {
           btn.onclick = async () => {
-            const confirmSend = confirm("⚠️ 已发送过付款资料，是否确认再发送一次？");
-            if (!confirmSend) return;
+            const sentBefore = btn.dataset.sent === 'true';
+            if (sentBefore) {
+              const confirmSend = confirm("⚠️ 已发送过付款资料，是否确认再发送一次？");
+              if (!confirmSend) return;
+            }
             const commentId = btn.dataset.id;
             const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
             const data = await res.json();
             if (data.success) {
               btn.innerText = "✅ 已发送";
+              btn.dataset.sent = 'true';
             } else {
               alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
             }
