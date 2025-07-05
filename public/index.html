@@ -8,110 +8,48 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="订单系统">
   <style>
-    body {
-      font-family: sans-serif;
-      background-color: #f7f7f7;
-      text-align: center;
-      padding-top: 40px;
-    }
-    .icon {
-      width: 120px;
-      margin-bottom: 20px;
-    }
-    .button-container {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      align-items: center;
-    }
+    /* 保留你的原样式 */
+    body { font-family: sans-serif; background-color: #f7f7f7; text-align: center; padding-top: 40px; }
+    .icon { width: 120px; margin-bottom: 20px; }
+    .button-container { display: flex; flex-direction: column; gap: 20px; align-items: center; }
     .action-button {
-      padding: 14px 28px;
-      font-size: 22px;
-      background-color: #228B22;
-      color: white;
-      font-weight: bold;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      width: 260px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      padding: 14px 28px; font-size: 22px; background-color: #228B22;
+      color: white; font-weight: bold; border: none; border-radius: 12px;
+      cursor: pointer; width: 260px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
-    .action-button:hover {
-      background-color: #1a6f1a;
-    }
+    .action-button:hover { background-color: #1a6f1a; }
     .orders {
-      max-width: 700px;
-      margin: 10px auto;
-      text-align: left;
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
+      max-width: 700px; margin: 10px auto; text-align: left;
+      background: white; padding: 20px; border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      font-size: 17px;
-      line-height: 1.6;
+      font-size: 17px; line-height: 1.6;
     }
-    .orders strong {
-      font-size: 18px;
-      display: block;
-      margin-bottom: 6px;
-    }
+    .orders strong { font-size: 18px; display: block; margin-bottom: 6px; }
     .message-box {
-      background: #f0f0f0;
-      border: 1px dashed #bbb;
-      padding: 14px;
-      white-space: pre-wrap;
-      border-radius: 8px;
-      font-size: 17px;
+      background: #f0f0f0; border: 1px dashed #bbb; padding: 14px;
+      white-space: pre-wrap; border-radius: 8px; font-size: 17px;
     }
     .inline-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin: 5px 0 10px 0;
-      justify-content: flex-start;
+      display: flex; flex-wrap: wrap; gap: 10px; margin: 5px 0 10px 0; justify-content: flex-start;
     }
     .inline-buttons .action-button {
-      width: auto;
-      padding: 8px 12px;
-      font-size: 15px;
-      border-radius: 8px;
+      width: auto; padding: 8px 12px; font-size: 15px; border-radius: 8px;
     }
     .top-summary {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
     }
     .custom-popup {
-      background: white;
-      padding: 25px;
-      border-radius: 12px;
-      max-width: 90%;
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateX(-16px);
-      box-shadow: 0 0 15px rgba(0,0,0,0.2);
-      font-size: 22px;
-      text-align: center;
-      line-height: 2;
-      font-weight: bold;
-      z-index: 9999;
-      max-height: 85vh;
-      overflow-y: auto;
-      color: red;
+      background: white; padding: 25px; border-radius: 12px; max-width: 90%;
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateX(-16px);
+      box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 22px; text-align: center;
+      line-height: 2; font-weight: bold; z-index: 9999; max-height: 85vh;
+      overflow-y: auto; color: red;
     }
     .popup-close, .popup-copy {
-      margin-top: 20px;
-      text-align: center;
-      font-size: 22px;
-      font-weight: bold;
-      color: red;
-      cursor: pointer;
+      margin-top: 20px; font-size: 22px; font-weight: bold; color: red;
+      cursor: pointer; display: inline-block; margin-right: 30px;
     }
-    .popup-copy {
-      color: green;
-    }
+    .popup-copy { color: green; }
   </style>
 </head>
 <body>
@@ -125,15 +63,6 @@
   <div id="orderResults"></div>
 
   <script>
-    function showCustomPopup(message) {
-      const existing = document.querySelector('.custom-popup');
-      if (existing) existing.remove();
-      const popup = document.createElement('div');
-      popup.className = 'custom-popup';
-      popup.innerHTML = `${message}`;
-      document.body.appendChild(popup);
-    }
-
     async function showProductSummary(sellingId) {
       try {
         const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
@@ -141,26 +70,30 @@
         if (!Array.isArray(data)) return;
 
         let totalQty = 0;
-        const lines = data.map(d => {
-          const userName = (d.user_name || '匿名顾客').slice(0, 14);
-          const id = d.selling_id || '';
+        let copyLines = [];
+        const details = data.map(d => {
           const price = parseFloat(d.price) || 0;
           const quantity = parseInt(d.quantity) || 1;
           totalQty += quantity;
-          return `${userName}　${id}　RM${price.toFixed(2)} x ${quantity}`;
-        });
+          const userName = (d.user_name || '匿名顾客').slice(0, 14);
+          const id = d.selling_id || '';
+          const line = `${userName}  ${id}  RM${price.toFixed(2)} x ${quantity}`;
+          copyLines.push(line);
+          return `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${line}</div>`;
+        }).join('');
 
-        const textToCopy = [...lines, `📌 总数：${totalQty} 份`].join('\n');
-        const htmlLines = lines.map(line => `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${line}</div>`).join('');
+        const copyContent = `【${sellingId} 销售记录】\n${copyLines.join("\n")}\n📌 总数：${totalQty} 份`;
 
         const popup = document.createElement('div');
         popup.className = 'custom-popup';
         popup.innerHTML = `
           <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
-          <div style="margin-top:12px">${htmlLines}</div>
+          <div style="margin-top:12px">${details}</div>
           <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
-          <div class="popup-copy" onclick="navigator.clipboard.writeText(\`${textToCopy}\`).then(() => alert('已复制'))">复制</div>
-          <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
+          <div style="margin-top:20px;">
+            <span class="popup-copy" onclick="navigator.clipboard.writeText(` + JSON.stringify(copyContent) + `).then(()=>alert('已复制'))">复制</span>
+            <span class="popup-close" onclick="this.parentElement.parentElement.remove()">关闭</span>
+          </div>
         `;
         document.body.appendChild(popup);
       } catch (err) {
