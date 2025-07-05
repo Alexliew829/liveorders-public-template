@@ -86,29 +86,8 @@ export default async function handler(req, res) {
       return numA - numB;
     });
 
-    const formattedLines = productLines.map(p =>
-      `▪️ ${p.sid} ${p.name} ${p.price.toFixed(2)} x ${p.qty} = RM${p.subtotal.toFixed(2)}`
-    );
-
-    const sgd = (total / 3.25).toFixed(2);
-
-    const paymentMessage = [
-      `感谢你的支持 🙏，订单详情`,
-      ...formattedLines,
-      '',
-      `总金额：RM${total.toFixed(2)}`,
-      `SGD${sgd} PayLah! / PayNow me @87158951 (Siang)`,
-      '',
-      '付款方式：',
-      'Lover Legend Adenium',
-      'Maybank：512389673060',
-      'Public Bank：3214928526',
-      '',
-      'TNG 付款连接：',
-      'https://liveorders-public-template.vercel.app/TNG.jpg',
-      '',
-      '📸 付款后请截图发到后台：https://m.me/lover.legend.gardening'
-    ].join('\n');
+    // ✅ 简化公开留言内容
+    const paymentMessage = `感谢你的支持 🙏\n已发送订单明细与付款方式 📩\n请点击这里查看：\nhttps://m.me/lover.legend.gardening`;
 
     // ✅ 留言公开回复付款详情
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
