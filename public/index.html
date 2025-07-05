@@ -231,9 +231,11 @@
         const data = await res.json();
         if (!Array.isArray(data)) return;
 
+        let totalQty = 0;
         const details = data.map(d => {
           const price = parseFloat(d.price) || 0;
           const quantity = parseInt(d.quantity) || 1;
+          totalQty += quantity;
           const userName = (d.user_name || '匿名顾客').slice(0, 14);
           const id = d.selling_id || '';
           const bold = `<span style="color:red; font-weight:bold; font-size:24px; margin-left:-16px;">RM${price.toFixed(2)} x ${quantity}</span>`;
@@ -245,6 +247,7 @@
         popup.innerHTML = `
           <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
           <div style="margin-top:12px">${details}</div>
+          <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
           <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
         `;
         document.body.appendChild(popup);
