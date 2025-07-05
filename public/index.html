@@ -240,12 +240,20 @@
     }
 
     function copyMessage(btn) {
-      const messageBox = btn.parentElement.previousElementSibling;
-      const text = messageBox.innerText;
-      navigator.clipboard.writeText(text).then(() => {
-        btn.innerText = "✅ 已复制";
-        btn.closest('.orders').dataset.copied = "yes";
-        setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
+  const messageBox = btn.parentElement.previousElementSibling;
+  const text = messageBox.innerText;
+
+  const parent = btn.closest('.orders');
+  const name = parent.querySelector('strong')?.innerText || '顾客';
+  const fullText = `${name}\n${text}`;
+
+  navigator.clipboard.writeText(fullText).then(() => {
+    btn.innerText = "✅ 已复制";
+    parent.dataset.copied = "yes";
+    setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
+  });
+}
+
       });
     }
 
