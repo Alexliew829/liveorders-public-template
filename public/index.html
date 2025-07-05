@@ -55,6 +55,33 @@
       display: block;
       margin-bottom: 6px;
     }
+    .message-box {
+      background: #f0f0f0;
+      border: 1px dashed #bbb;
+      padding: 14px;
+      white-space: pre-wrap;
+      border-radius: 8px;
+      font-size: 17px;
+    }
+    .inline-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 5px 0 10px 0;
+      justify-content: flex-start;
+    }
+    .inline-buttons .action-button {
+      width: auto;
+      padding: 8px 12px;
+      font-size: 15px;
+      border-radius: 8px;
+    }
+    .top-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
     .custom-popup {
       background: white;
       padding: 25px;
@@ -82,15 +109,15 @@
       color: red;
       cursor: pointer;
     }
-    .popup-copy {
+    .copy-popup-btn {
       margin-top: 10px;
-      font-size: 20px;
-      background-color: #ccc;
-      color: #000;
+      background-color: #444;
+      color: white;
       padding: 6px 16px;
+      border: none;
       border-radius: 8px;
+      font-size: 16px;
       cursor: pointer;
-      display: inline-block;
     }
   </style>
 </head>
@@ -103,65 +130,42 @@
   </div>
   <div id="groupedOrders" class="orders"></div>
   <div id="orderResults"></div>
+
   <script>
-    function showCustomPopup(message) {
-      const existing = document.querySelector('.custom-popup');
-      if (existing) existing.remove();
-      const popup = document.createElement('div');
-      popup.className = 'custom-popup';
-      popup.innerHTML = `${message}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
-      document.body.appendChild(popup);
-    }
-
-    async function call(api, isPost = false) {
-      try {
-        const res = await fetch(api, { method: isPost ? 'POST' : 'GET' });
-        const data = await res.json();
-        alert(data.message || JSON.stringify(data));
-      } catch (e) {
-        alert('API请求失败');
-      }
-    }
-
-    async function showPendingOrders() {
-      const res = await fetch('/api/pendingOrders');
-      const data = await res.json();
-      const grouped = data.grouped || {};
-      const summaryBox = document.getElementById('groupedOrders');
-      summaryBox.innerHTML = '<strong>📦 A类商品订单小结：</strong><br><br>';
-      Object.entries(grouped).forEach(([key]) => {
-        const btn = document.createElement('button');
-        btn.className = 'action-button';
-        btn.innerText = key;
-        btn.onclick = () => showProductSummary(key);
-        summaryBox.appendChild(btn);
-      });
-    }
-
     async function showProductSummary(sellingId) {
-      const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
-      const data = await res.json();
-      let totalQty = 0;
-      let copiedText = `【${sellingId} 销售记录】\n`;
-      const details = data.map(d => {
-        const user = (d.user_name || '匿名').slice(0, 16);
-        const price = parseFloat(d.price).toFixed(2);
-        const qty = d.quantity;
-        totalQty += qty;
-        copiedText += `${user}\n${sellingId}  RM${price} x ${qty}\n`;
-        return `<div style="font-size:22px; white-space:nowrap;">${user}　${sellingId}　<span style="color:red; font-weight:bold; font-size:22px;">RM${price} x ${qty}</span></div>`;
-      }).join('');
-      copiedText += `\n📌 总数：${totalQty} 份`;
-      const popup = document.createElement('div');
-      popup.className = 'custom-popup';
-      popup.innerHTML = `
-        <div><strong style="font-size:24px">（${sellingId} 销售记录）</strong></div>
-        <div style="margin: 12px 0">${details}</div>
-        <div style="font-size:20px; margin-bottom: 8px;">📌 总数：${totalQty} 份</div>
-        <div class="popup-copy" onclick="navigator.clipboard.writeText(` + "`" + copiedText + "`") + ".then(() => alert('\u5df2\u590d\u5236'))">复制</div>
-        <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
-      `;
-      document.body.appendChild(popup);
+      try {
+        const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+
+        let totalQty = 0;
+        let copyText = `【${sellingId} 销售记录】\n`;
+        const details = data.map(d => {
+          const price = parseFloat(d.price) || 0;
+          const quantity = parseInt(d.quantity) || 1;
+          totalQty += quantity;
+          const userName = (d.user_name || '匿名顾客').slice(0, 14);
+          const id = d.selling_id || '';
+          copyText += `${userName} ${id} RM${price.toFixed(2)} x ${quantity}\n`;
+          const bold = `<span style="color:red; font-weight:bold; font-size:24px; margin-left:-16px;">RM${price.toFixed(2)} x ${quantity}</span>`;
+          return `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${userName}　${id}　${bold}</div>`;
+        }).join('');
+
+        copyText += `\n总数：${totalQty} 份`;
+
+        const popup = document.createElement('div');
+        popup.className = 'custom-popup';
+        popup.innerHTML = `
+          <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
+          <div style="margin-top:12px">${details}</div>
+          <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
+          <button class="copy-popup-btn" onclick="navigator.clipboard.writeText(` + JSON.stringify(copyText) + `).then(() => alert('已复制'))">复制</button>
+          <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
+        `;
+        document.body.appendChild(popup);
+      } catch (err) {
+        alert('读取销售记录失败：' + err.message);
+      }
     }
   </script>
 </body>
