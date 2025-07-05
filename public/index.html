@@ -88,9 +88,9 @@
       border-radius: 12px;
       max-width: 90%;
       position: fixed;
-      top: 20px;
+      top: 10px;
       left: 50%;
-      transform: translateX(-50%) translateX(-16px);
+      transform: translateX(-50%) translateX(-18px);
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       font-size: 22px;
       text-align: center;
@@ -122,25 +122,6 @@
   <div id="orderResults"></div>
 
   <script>
-    function showCustomPopup(message) {
-      const existing = document.querySelector('.custom-popup');
-      if (existing) existing.remove();
-      const popup = document.createElement('div');
-      popup.className = 'custom-popup';
-      popup.innerHTML = `${message}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
-      document.body.appendChild(popup);
-    }
-
-    async function copySummaryText() {
-      const popup = document.querySelector('.custom-popup');
-      if (!popup) return alert("找不到内容");
-
-      let text = popup.innerText;
-      text = text.replace(/📋\s*复制/, '').replace(/关闭/, '').trim();
-      await navigator.clipboard.writeText(text);
-      alert("✅ 已复制销售记录！");
-    }
-
     async function showProductSummary(sellingId) {
       try {
         const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
@@ -174,37 +155,15 @@
       }
     }
 
-    window.call = async function(api, isPost = false) {
-      try {
-        const isExport = api.includes('exportOrders');
-        const res = await fetch(api, {
-          method: isPost ? 'POST' : 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
+    async function copySummaryText() {
+      const popup = document.querySelector('.custom-popup');
+      if (!popup) return alert("找不到内容");
 
-        if (isExport) {
-          const blob = await res.blob();
-          const today = new Date();
-          const day = String(today.getDate()).padStart(2, '0');
-          const month = String(today.getMonth() + 1).padStart(2, '0');
-          const year = String(today.getFullYear()).toString().slice(2);
-          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          return;
-        }
-
-        const data = await res.json();
-        alert(data.message || JSON.stringify(data));
-      } catch (err) {
-        alert('错误：' + (err.message || '无法连接服务器'));
-      }
-    };
+      let text = popup.innerText;
+      text = text.replace(/📋\s*复制/, '').replace(/关闭/, '').trim();
+      await navigator.clipboard.writeText(text);
+      alert("✅ 已复制销售记录！");
+    }
 
     async function showPendingOrders() {
       try {
@@ -277,6 +236,38 @@
         setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
       });
     }
+
+    window.call = async function(api, isPost = false) {
+      try {
+        const isExport = api.includes('exportOrders');
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (isExport) {
+          const blob = await res.blob();
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('错误：' + (err.message || '无法连接服务器'));
+      }
+    };
   </script>
 </body>
 </html>
