@@ -200,6 +200,14 @@
         document.querySelectorAll('.send-btn').forEach(btn => {
           btn.onclick = async () => {
             const sentBefore = btn.dataset.sent === 'true';
+            const parent = btn.closest('.orders');
+            const copied = parent.dataset.copied;
+
+            if (!copied) {
+              alert("⚠️ 请先发送订单明细和付款资料给客户，然后再回来公开发送。");
+              return;
+            }
+
             if (sentBefore) {
               const confirmSend = confirm("⚠️ 已发送过付款资料，是否确认再发送一次？");
               if (!confirmSend) return;
@@ -225,6 +233,7 @@
       const text = messageBox.innerText;
       navigator.clipboard.writeText(text).then(() => {
         btn.innerText = "✅ 已复制";
+        btn.closest('.orders').dataset.copied = "yes";
         setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
       });
     }
