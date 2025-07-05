@@ -87,17 +87,20 @@
       padding: 25px;
       border-radius: 12px;
       max-width: 90%;
-      margin: 20px auto 80px auto;  /* 靠近顶部 + 有底部留白 */
+      position: fixed;
+      top: 30px;
+      left: 10px;
+      overflow-y: auto;
+      max-height: 80vh;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       font-size: 20px;
       text-align: left;
-      line-height: 2.0;
+      line-height: 1.8;
       font-weight: bold;
       z-index: 9999;
-      position: relative;
     }
     .popup-close {
-      margin-top: 20px;
+      margin-top: 10px;
       text-align: center;
       font-size: 24px;
       font-weight: bold;
@@ -230,17 +233,17 @@
         const details = data.map(d => {
           const price = parseFloat(d.price) || 0;
           const quantity = parseInt(d.quantity) || 1;
-          const userName = (d.user_name || '匿名顾客').slice(0, 16);
+          const userName = (d.user_name || '匿名顾客').slice(0, 14);
           const id = d.selling_id || '';
           const bold = `<span style="color:red; font-weight:bold; font-size:24px;">RM${price.toFixed(2)} x ${quantity}</span>`;
-          return `<div style="font-size:22px; white-space:nowrap; margin-bottom:6px;">${userName}　${id}　${bold}</div>`;
+          return `<div style="font-size:22px; white-space:nowrap; margin-bottom:2px;">${userName}　${id}　${bold}</div>`;
         }).join('');
 
         const popup = document.createElement('div');
         popup.className = 'custom-popup';
         popup.innerHTML = `
           <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
-          <div style="margin-top:16px">${details}</div>
+          <div>${details}</div>
           <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
         `;
         document.body.appendChild(popup);
