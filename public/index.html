@@ -173,6 +173,110 @@
         alert('读取销售记录失败：' + err.message);
       }
     }
+
+    window.call = async function(api, isPost = false) {
+      try {
+        const isExport = api.includes('exportOrders');
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (isExport) {
+          const blob = await res.blob();
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('错误：' + (err.message || '无法连接服务器'));
+      }
+    };
+
+    async function showPendingOrders() {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+
+        const grouped = data.grouped || {};
+        const orders = data.orders || [];
+
+        const summaryBox = document.getElementById('groupedOrders');
+        summaryBox.innerHTML = '';
+        if (Object.keys(grouped).length > 0) {
+          let total = orders.reduce((sum, o) => sum + o.total, 0);
+          let html = `<div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
+          html += `<div class="inline-buttons">`;
+          for (const id in grouped) {
+            html += `<button class="action-button product-btn" data-id="${id}">${id}</button>`;
+          }
+          html += `</div>`;
+          summaryBox.innerHTML = html;
+
+          document.querySelectorAll('.product-btn').forEach(btn => {
+            btn.onclick = () => {
+              const id = btn.dataset.id;
+              showProductSummary(id);
+            };
+          });
+        }
+
+        const orderResults = document.getElementById('orderResults');
+        orderResults.innerHTML = '';
+        orders.forEach(order => {
+          const div = document.createElement('div');
+          div.className = 'orders';
+          div.innerHTML = `
+            <strong>${order.user_name}</strong>
+            <div class="message-box">${order.message}</div>
+            <div class="inline-buttons">
+              <button class="action-button send-btn" data-id="${order.comment_id}">公开发送</button>
+              <button class="action-button" style="background-color:#888;" onclick="copyMessage(this)">私发复制</button>
+            </div>
+          `;
+          orderResults.appendChild(div);
+        });
+
+        document.querySelectorAll('.send-btn').forEach(btn => {
+          btn.onclick = async () => {
+            const confirmSend = confirm("⚠️ 已发送过付款资料，是否确认再发送一次？");
+            if (!confirmSend) return;
+            const commentId = btn.dataset.id;
+            const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
+            const data = await res.json();
+            if (data.success) {
+              btn.innerText = "✅ 已发送";
+            } else {
+              alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
+            }
+          };
+        });
+      } catch (err) {
+        alert('显示订单失败：' + err.message);
+      }
+    }
+
+    function copyMessage(btn) {
+      const messageBox = btn.parentElement.previousElementSibling;
+      const text = messageBox.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerText = "✅ 已复制";
+        setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
+      });
+    }
   </script>
 </body>
 </html>
