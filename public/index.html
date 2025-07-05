@@ -120,6 +120,7 @@
   </div>
   <div id="groupedOrders" class="orders"></div>
   <div id="orderResults"></div>
+
   <script>
     function showCustomPopup(message) {
       const existing = document.querySelector('.custom-popup');
@@ -128,6 +129,159 @@
       popup.className = 'custom-popup';
       popup.innerHTML = `${message}<div class="popup-close" onclick="this.parentElement.remove()">关闭</div>`;
       document.body.appendChild(popup);
+    }
+
+    window.call = async function(api, isPost = false) {
+      try {
+        const isExport = api.includes('exportOrders');
+        const res = await fetch(api, {
+          method: isPost ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (isExport) {
+          const blob = await res.blob();
+          const today = new Date();
+          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const year = String(today.getFullYear()).toString().slice(2);
+          const filename = `${day}-${month}-${year} Bonsai-Order.xlsx`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (err) {
+        alert('错误：' + (err.message || '无法连接服务器'));
+      }
+    };
+
+    async function showPendingOrders() {
+      try {
+        const res = await fetch('/api/pendingOrders');
+        const data = await res.json();
+
+        const grouped = data.grouped || {};
+        const orders = data.orders || [];
+
+        const summaryBox = document.getElementById('groupedOrders');
+        summaryBox.innerHTML = '';
+        if (Object.keys(grouped).length > 0) {
+          let total = orders.reduce((sum, o) => sum + o.total, 0);
+          let html = `<div class="top-summary"><strong>📦 A类商品订单小结：</strong><strong>今日直播：RM${total.toFixed(2)}</strong></div>`;
+          html += `<div class="inline-buttons">`;
+          for (const id in grouped) {
+            html += `<button class="action-button product-btn" data-id="${id}">${id}</button>`;
+          }
+          html += `</div>`;
+          summaryBox.innerHTML = html;
+
+          document.querySelectorAll('.product-btn').forEach(btn => {
+            btn.onclick = () => {
+              const id = btn.dataset.id;
+              showProductSummary(id);
+            };
+          });
+        }
+
+        const orderResults = document.getElementById('orderResults');
+        orderResults.innerHTML = '';
+        orders.forEach(order => {
+          const div = document.createElement('div');
+          div.className = 'orders';
+          div.innerHTML = `
+            <strong>${order.user_name}</strong>
+            <div class="message-box">${order.message}</div>
+            <div class="inline-buttons">
+              <button class="action-button send-btn" data-id="${order.comment_id}" data-sent="${order.replied_public ? 'true' : 'false'}">公开发送</button>
+              <button class="action-button" style="background-color:#888;" onclick="copyMessage(this)">私发复制</button>
+            </div>
+          `;
+          orderResults.appendChild(div);
+        });
+
+        document.querySelectorAll('.send-btn').forEach(btn => {
+          btn.onclick = async () => {
+            const sentBefore = btn.dataset.sent === 'true';
+            const parent = btn.closest('.orders');
+            const copied = parent.dataset.copied;
+
+            if (!copied) {
+              showCustomPopup("⚠️ 请先PM订单明细和付款资料给客户，然后再回来公开发送。");
+              return;
+            }
+
+            if (sentBefore) {
+              const confirmSend = confirm("⚠️ 已发送过付款资料，是否确认再发送一次？");
+              if (!confirmSend) return;
+            }
+
+            const commentId = btn.dataset.id;
+            const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
+            const data = await res.json();
+            if (data.success) {
+              btn.innerText = "✅ 已发送";
+              btn.dataset.sent = 'true';
+            } else {
+              alert("❌ 发送失败：" + (data.error || JSON.stringify(data)));
+            }
+          };
+        });
+      } catch (err) {
+        alert('显示订单失败：' + err.message);
+      }
+    }
+
+    function copyMessage(btn) {
+      const messageBox = btn.parentElement.previousElementSibling;
+      const text = messageBox.innerText;
+      const parent = btn.closest('.orders');
+      const name = parent.querySelector('strong')?.innerText || '顾客';
+      const fullText = `${name}\n${text}`;
+
+      navigator.clipboard.writeText(fullText).then(() => {
+        btn.innerText = "✅ 已复制";
+        parent.dataset.copied = "yes";
+        setTimeout(() => { btn.innerText = "私发复制"; }, 1500);
+      });
+    }
+
+    async function showProductSummary(sellingId) {
+      try {
+        const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+
+        let totalQty = 0;
+        const details = data.map(d => {
+          const price = parseFloat(d.price) || 0;
+          const quantity = parseInt(d.quantity) || 1;
+          totalQty += quantity;
+          const userName = (d.user_name || '匿名顾客').slice(0, 14);
+          const id = d.selling_id || '';
+          const bold = `<span style="color:red; font-weight:bold; font-size:24px; margin-left:-16px;">RM${price.toFixed(2)} x ${quantity}</span>`;
+          return `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${userName}　${id}　${bold}</div>`;
+        }).join('');
+
+        const popup = document.createElement('div');
+        popup.className = 'custom-popup';
+        popup.innerHTML = `
+          <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
+          <div style="margin-top:12px">${details}</div>
+          <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
+          <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
+        `;
+        document.body.appendChild(popup);
+      } catch (err) {
+        alert('读取销售记录失败：' + err.message);
+      }
     }
   </script>
 </body>
