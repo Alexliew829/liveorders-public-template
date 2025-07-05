@@ -50,6 +50,38 @@
       font-size: 17px;
       line-height: 1.6;
     }
+    .orders strong {
+      font-size: 18px;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .message-box {
+      background: #f0f0f0;
+      border: 1px dashed #bbb;
+      padding: 14px;
+      white-space: pre-wrap;
+      border-radius: 8px;
+      font-size: 17px;
+    }
+    .inline-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 5px 0 10px 0;
+      justify-content: flex-start;
+    }
+    .inline-buttons .action-button {
+      width: auto;
+      padding: 8px 12px;
+      font-size: 15px;
+      border-radius: 8px;
+    }
+    .top-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
     .custom-popup {
       background: white;
       padding: 25px;
@@ -69,17 +101,17 @@
       overflow-y: auto;
       color: red;
     }
-    .popup-close,
-    .popup-copy {
-      display: inline-block;
+    .popup-close, .popup-copy {
       margin-top: 20px;
+      text-align: center;
       font-size: 22px;
       font-weight: bold;
+      color: red;
       cursor: pointer;
-      margin: 20px 16px 0;
     }
-    .popup-close { color: red; }
-    .popup-copy { color: green; }
+    .popup-copy {
+      color: green;
+    }
   </style>
 </head>
 <body>
@@ -93,6 +125,15 @@
   <div id="orderResults"></div>
 
   <script>
+    function showCustomPopup(message) {
+      const existing = document.querySelector('.custom-popup');
+      if (existing) existing.remove();
+      const popup = document.createElement('div');
+      popup.className = 'custom-popup';
+      popup.innerHTML = `${message}`;
+      document.body.appendChild(popup);
+    }
+
     async function showProductSummary(sellingId) {
       try {
         const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
@@ -100,42 +141,31 @@
         if (!Array.isArray(data)) return;
 
         let totalQty = 0;
-        const lines = [];
-        const details = data.map(d => {
+        const lines = data.map(d => {
+          const userName = (d.user_name || '匿名顾客').slice(0, 14);
+          const id = d.selling_id || '';
           const price = parseFloat(d.price) || 0;
           const quantity = parseInt(d.quantity) || 1;
           totalQty += quantity;
-          const userName = (d.user_name || '匿名顾客').slice(0, 16);
-          const id = d.selling_id || '';
-          const line = `${userName}  ${id}  RM${price.toFixed(2)} x ${quantity}`;
-          lines.push(line);
-          return `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${line}</div>`;
-        }).join('');
+          return `${userName}　${id}　RM${price.toFixed(2)} x ${quantity}`;
+        });
 
-        const result = `【${sellingId} 销售记录】\n` + lines.join('\n') + `\n📌 总数：${totalQty} 份`;
+        const textToCopy = [...lines, `📌 总数：${totalQty} 份`].join('\n');
+        const htmlLines = lines.map(line => `<div style="font-size:22px; white-space:nowrap; margin-bottom:4px;">${line}</div>`).join('');
 
         const popup = document.createElement('div');
         popup.className = 'custom-popup';
         popup.innerHTML = `
           <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
-          <div style="margin-top:12px">${details}</div>
+          <div style="margin-top:12px">${htmlLines}</div>
           <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
-          <div>
-            <span class="popup-copy" onclick="copySalesRecord(\`${result}\`, this)">复制</span>
-            <span class="popup-close" onclick="this.parentElement.parentElement.remove()">关闭</span>
-          </div>
+          <div class="popup-copy" onclick="navigator.clipboard.writeText(\`${textToCopy}\`).then(() => alert('已复制'))">复制</div>
+          <div class="popup-close" onclick="this.parentElement.remove()">关闭</div>
         `;
         document.body.appendChild(popup);
       } catch (err) {
         alert('读取销售记录失败：' + err.message);
       }
-    }
-
-    function copySalesRecord(text, el) {
-      navigator.clipboard.writeText(text).then(() => {
-        el.innerText = '✅ 已复制';
-        setTimeout(() => { el.innerText = '复制'; }, 1500);
-      });
     }
   </script>
 </body>
