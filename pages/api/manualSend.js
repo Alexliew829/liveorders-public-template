@@ -87,7 +87,8 @@ export default async function handler(req, res) {
     });
 
     // ✅ 简化公开留言内容
-    const paymentMessage = `感谢你的支持 🙏\n已发送订单明细与付款方式 📩\n请点击这里查看：\nhttps://m.me/lover.legend.gardening`;
+    const paymentMessage = `🙏 感谢你的支持\n📩 已发送付款详情，请查阅 Inbox\nm.me/lover.legend.gardening`;
+
 
     // ✅ 留言公开回复付款详情
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
