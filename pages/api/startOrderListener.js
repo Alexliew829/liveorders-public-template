@@ -19,19 +19,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 改为抓取最新直播影片 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
+    // ✅ 改为抓取最新贴文（不管是不是直播）
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得直播影片 ID，可能尚未开播', raw: postData });
+      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
     }
-
-    // ✅ 获取上次记录的贴文 ID
-    const configRef = db.collection('config').doc('last_post_id');
-    const configSnap = await configRef.get();
-    const last_post_id = configSnap.exists ? configSnap.data().post_id : null;
-    const isNewLive = post_id !== last_post_id;
 
     // ✅ 每次都清空 live_products
     const liveSnap = await db.collection('live_products').get();
@@ -39,20 +33,16 @@ export default async function handler(req, res) {
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 仅首次直播或 force 模式下清空 triggered_comments
-    if (isNewLive || isForce) {
+    // ✅ 仅在 force 模式下，清空 triggered_comments
+    if (isForce) {
       const orderSnap = await db.collection('triggered_comments').get();
       const batch2 = db.batch();
       orderSnap.forEach(doc => batch2.delete(doc.ref));
       await batch2.commit();
     }
 
-    // ✅ 更新最新 Post ID
-    try {
-      await configRef.set({ post_id });
-    } catch (err) {
-      return res.status(500).json({ error: '写入 config.post_id 失败', details: err.message });
-    }
+    // ✅ 更新 config.post_id 强制写入
+    await db.collection('config').doc('last_post_id').set({ post_id });
 
     // ✅ 获取留言（主页）
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
@@ -103,13 +93,13 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      message: '商品写入完成',
+      message: '✅ 商品强制写入完成',
       post_id,
       success: count,
       skipped: comments.length - count,
-      isNewLive,
       isForce,
     });
+
   } catch (err) {
     console.error('执行错误：', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
