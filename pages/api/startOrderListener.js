@@ -37,11 +37,13 @@ export default async function handler(req, res) {
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 每次都清空 triggered_comments（不再判断是否新贴文）
-    const orderSnap = await db.collection('triggered_comments').get();
-    const batch2 = db.batch();
-    orderSnap.forEach(doc => batch2.delete(doc.ref));
-    await batch2.commit();
+    // ✅ 只有新直播才清空 triggered_comments
+    if (isNewLive) {
+      const orderSnap = await db.collection('triggered_comments').get();
+      const batch2 = db.batch();
+      orderSnap.forEach(doc => batch2.delete(doc.ref));
+      await batch2.commit();
+    }
 
     // ✅ 更新最新 Post ID
     try {
@@ -93,7 +95,7 @@ export default async function handler(req, res) {
         raw_message: message,
         price_raw,
         price,
-        ...(type === 'A' && { stock }), // ✅ 仅 A 类写入库存，未写则为 1
+        ...(type === 'A' && { stock }),
         created_at: new Date().toISOString(),
         post_id,
       });
