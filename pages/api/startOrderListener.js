@@ -13,18 +13,26 @@ const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 export default async function handler(req, res) {
   const isDebug = req.query.debug !== undefined;
   const isForce = req.query.force !== undefined;
+  const forceUseFeed = req.query.forceUseFeed !== undefined;
 
   if (req.method !== 'POST' && !isDebug) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
   try {
-    // ✅ 改为抓取最新贴文（不管是不是直播）
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
+    // ✅ 选择使用影片或贴文方式抓取 Post ID
+    let postRes, postData, post_id;
+
+    if (forceUseFeed) {
+      postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/feed?access_token=${PAGE_TOKEN}&limit=1`);
+    } else {
+      postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
+    }
+
+    postData = await postRes.json();
+    post_id = postData?.data?.[0]?.id;
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+      return res.status(404).json({ error: '无法取得贴文/影片 ID', raw: postData });
     }
 
     // ✅ 每次都清空 live_products
@@ -98,6 +106,7 @@ export default async function handler(req, res) {
       success: count,
       skipped: comments.length - count,
       isForce,
+      used: forceUseFeed ? 'feed' : 'videos'
     });
 
   } catch (err) {
