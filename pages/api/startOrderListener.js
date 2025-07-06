@@ -31,13 +31,13 @@ export default async function handler(req, res) {
     const last_post_id = configSnap.exists ? configSnap.data().post_id : null;
     const isNewLive = last_post_id !== post_id;
 
-    // ✅ 清空 live_products（每次都清空）
+    // ✅ 每次都清空 live_products
     const liveSnap = await db.collection('live_products').get();
     const batch1 = db.batch();
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 只有新直播才清空 triggered_comments
+    // ✅ 只有新直播时才清空 triggered_comments
     if (isNewLive) {
       const orderSnap = await db.collection('triggered_comments').get();
       const batch2 = db.batch();
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       await batch2.commit();
     }
 
-    // ✅ 更新最新 Post ID
+    // ✅ 每次都更新 config.post_id
     try {
       await configRef.set({ post_id });
     } catch (err) {
@@ -69,23 +69,19 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 提取价格与库存（如 RM32.32-200）
       const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})(?:[^0-9]*[-_~～. ]?(\d+))?\s*$/i);
       if (!priceMatch) continue;
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
-      // ✅ 没写库存就默认为 1（只针对 A 类）
       const stock = type === 'A'
         ? (priceMatch[2] ? parseInt(priceMatch[2]) : 50)
         : undefined;
 
-      // ✅ 提取商品名
       let name = message;
       name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
       name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}(?:[^0-9]*[-_~～. ]?\d+)?\s*$/i, '');
-      name = name.trim().slice(0, 30); // 最多30字
+      name = name.trim().slice(0, 30);
 
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
