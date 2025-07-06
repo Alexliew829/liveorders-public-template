@@ -19,12 +19,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 改为抓取最新直播影片 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
+    // ✅ 改为先尝试抓取直播影片
+    let post_id = null;
+    let source = 'videos';
+    const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
+    const videoData = await videoRes.json();
+    post_id = videoData?.data?.[0]?.id || null;
+
+    // 若无法抓取影片 ID，则改抓一般贴文
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得直播影片 ID，可能尚未开播', raw: postData });
+      source = 'posts';
+      const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+      const postData = await postRes.json();
+      post_id = postData?.data?.[0]?.id || null;
+    }
+
+    if (!post_id) {
+      return res.status(404).json({ error: '无法取得最新贴文 ID', source });
     }
 
     // ✅ 获取上次记录的贴文 ID
@@ -39,7 +50,7 @@ export default async function handler(req, res) {
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 清空 triggered_comments（只要是新直播或强制）
+    // ✅ 仅在新直播 或 force 模式下，清空 triggered_comments
     if (isNewLive || isForce) {
       const orderSnap = await db.collection('triggered_comments').get();
       const batch2 = db.batch();
@@ -47,8 +58,12 @@ export default async function handler(req, res) {
       await batch2.commit();
     }
 
-    // ✅ 更新 Post ID（强制时也写入）
-    await configRef.set({ post_id });
+    // ✅ 更新最新 Post ID
+    try {
+      await configRef.set({ post_id });
+    } catch (err) {
+      return res.status(500).json({ error: '写入 config.post_id 失败', details: err.message });
+    }
 
     // ✅ 获取留言（主页）
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
@@ -105,7 +120,9 @@ export default async function handler(req, res) {
       skipped: comments.length - count,
       isNewLive,
       isForce,
+      source
     });
+
   } catch (err) {
     console.error('执行错误：', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
