@@ -5,8 +5,8 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-
 const db = getFirestore();
+
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
@@ -15,42 +15,41 @@ export default async function handler(req, res) {
   const isForce = req.query.force !== undefined;
   const forceUseFeed = req.query.forceUseFeed !== undefined;
 
-  if (req.method !== 'POST' && !isDebug) {
+  if (req.method !== 'POST' && !isDebug && !isForce && !forceUseFeed) {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
 
   try {
-    // ✅ 选择使用影片或贴文方式抓取 Post ID
-    let postRes, postData, post_id;
+    // ✅ 获取贴文 ID
+    let post_id = null;
 
     if (forceUseFeed) {
-      postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/feed?access_token=${PAGE_TOKEN}&limit=1`);
+      const feedRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+      const feedData = await feedRes.json();
+      post_id = feedData?.data?.[0]?.id;
     } else {
-      postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
+      const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
+      const videoData = await videoRes.json();
+      post_id = videoData?.data?.[0]?.id;
     }
 
-    postData = await postRes.json();
-    post_id = postData?.data?.[0]?.id;
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得贴文/影片 ID', raw: postData });
+      return res.status(404).json({ error: '无法取得贴文 ID', method: forceUseFeed ? 'feed' : 'videos' });
     }
 
-    // ✅ 每次都清空 live_products
+    // ✅ 清空 live_products
     const liveSnap = await db.collection('live_products').get();
     const batch1 = db.batch();
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 仅在 force 模式下，清空 triggered_comments
+    // ✅ force 模式清空订单
     if (isForce) {
       const orderSnap = await db.collection('triggered_comments').get();
       const batch2 = db.batch();
       orderSnap.forEach(doc => batch2.delete(doc.ref));
       await batch2.commit();
     }
-
-    // ✅ 更新 config.post_id 强制写入
-    await db.collection('config').doc('last_post_id').set({ post_id });
 
     // ✅ 获取留言（主页）
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
@@ -74,10 +73,7 @@ export default async function handler(req, res) {
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
-      const stock = type === 'A'
-        ? (priceMatch[2] ? parseInt(priceMatch[2]) : 50)
-        : undefined;
+      const stock = type === 'A' ? (priceMatch[2] ? parseInt(priceMatch[2]) : 50) : undefined;
 
       let name = message;
       name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
@@ -100,13 +96,18 @@ export default async function handler(req, res) {
       count++;
     }
 
+    // ✅ 只有写入成功，才更新 config.post_id
+    if (count > 0) {
+      await db.collection('config').doc('last_post_id').set({ post_id });
+    }
+
     return res.status(200).json({
       message: '✅ 商品强制写入完成',
       post_id,
       success: count,
       skipped: comments.length - count,
       isForce,
-      used: forceUseFeed ? 'feed' : 'videos'
+      used: forceUseFeed ? 'feed' : 'videos',
     });
 
   } catch (err) {
