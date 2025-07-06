@@ -19,12 +19,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 获取最新贴文 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
+    // ✅ 改为抓取最新直播影片 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
     const postData = await postRes.json();
     const post_id = postData?.data?.[0]?.id;
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+      return res.status(404).json({ error: '无法取得直播影片 ID，可能尚未开播', raw: postData });
     }
 
     // ✅ 获取上次记录的贴文 ID
@@ -71,7 +71,6 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 提取价格与库存
       const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})(?:[^0-9]*[-_~～. ]?(\d+))?\s*$/i);
       if (!priceMatch) continue;
 
