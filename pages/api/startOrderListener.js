@@ -37,13 +37,11 @@ export default async function handler(req, res) {
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 如果是新直播，清空 triggered_comments
-    if (isNewLive) {
-      const orderSnap = await db.collection('triggered_comments').get();
-      const batch2 = db.batch();
-      orderSnap.forEach(doc => batch2.delete(doc.ref));
-      await batch2.commit();
-    }
+    // ✅ 每次都清空 triggered_comments（不再判断是否新贴文）
+    const orderSnap = await db.collection('triggered_comments').get();
+    const batch2 = db.batch();
+    orderSnap.forEach(doc => batch2.delete(doc.ref));
+    await batch2.commit();
 
     // ✅ 更新最新 Post ID
     try {
