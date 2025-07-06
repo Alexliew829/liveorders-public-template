@@ -19,26 +19,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    let post_id = null;
-
-    // ✅ 优先尝试抓直播影片 ID
-    try {
-      const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
-      const videoData = await videoRes.json();
-      post_id = videoData?.data?.[0]?.id;
-    } catch (e) {
-      console.warn('抓取直播影片失败:', e);
-    }
-
-    // ✅ 若抓不到影片，再抓最新贴文（关播后）
+    // ✅ 改为抓取最新直播影片 ID
+    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
+    const postData = await postRes.json();
+    const post_id = postData?.data?.[0]?.id;
     if (!post_id) {
-      const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
-      const postData = await postRes.json();
-      post_id = postData?.data?.[0]?.id;
-    }
-
-    if (!post_id) {
-      return res.status(404).json({ error: '无法取得任何 Post ID' });
+      return res.status(404).json({ error: '无法取得直播影片 ID，可能尚未开播', raw: postData });
     }
 
     // ✅ 获取上次记录的贴文 ID
@@ -53,7 +39,7 @@ export default async function handler(req, res) {
     liveSnap.forEach(doc => batch1.delete(doc.ref));
     await batch1.commit();
 
-    // ✅ 仅在新直播 或 force 模式下，清空 triggered_comments
+    // ✅ 清空 triggered_comments（只要是新直播或强制）
     if (isNewLive || isForce) {
       const orderSnap = await db.collection('triggered_comments').get();
       const batch2 = db.batch();
@@ -61,12 +47,8 @@ export default async function handler(req, res) {
       await batch2.commit();
     }
 
-    // ✅ 更新最新 Post ID
-    try {
-      await configRef.set({ post_id });
-    } catch (err) {
-      return res.status(500).json({ error: '写入 config.post_id 失败', details: err.message });
-    }
+    // ✅ 更新 Post ID（强制时也写入）
+    await configRef.set({ post_id });
 
     // ✅ 获取留言（主页）
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
@@ -124,7 +106,6 @@ export default async function handler(req, res) {
       isNewLive,
       isForce,
     });
-
   } catch (err) {
     console.error('执行错误：', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
