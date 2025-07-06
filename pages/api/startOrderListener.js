@@ -19,12 +19,27 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 改为抓取最新直播影片 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
+    // ✅ 尝试先从 /videos 抓取直播影片 ID
+    let post_id = null;
+    let source = 'videos';
+    let resVideo = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?access_token=${PAGE_TOKEN}&limit=3`);
+    let dataVideo = await resVideo.json();
+
+    if (dataVideo?.data?.length) {
+      post_id = dataVideo.data[0].id;
+    }
+
+    // ❌ 如果 /videos 抓不到，再尝试从 /feed 中抓
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得直播影片 ID，可能尚未开播', raw: postData });
+      source = 'feed';
+      let resFeed = await fetch(`https://graph.facebook.com/${PAGE_ID}/feed?access_token=${PAGE_TOKEN}&limit=5`);
+      let dataFeed = await resFeed.json();
+      const livePost = dataFeed?.data?.find(p => p.status_type === 'live_video' || p.message?.includes('直播'));
+      if (livePost) post_id = livePost.id;
+    }
+
+    if (!post_id) {
+      return res.status(404).json({ error: '无法取得直播贴文 ID，可能尚未开播' });
     }
 
     // ✅ 获取上次记录的贴文 ID
@@ -105,6 +120,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       message: '商品写入完成',
       post_id,
+      source,
       success: count,
       skipped: comments.length - count,
       isNewLive,
