@@ -17,12 +17,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 获取最新 Facebook 贴文 ID
-    const postRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?access_token=${PAGE_TOKEN}&limit=1`);
-    const postData = await postRes.json();
-    const post_id = postData?.data?.[0]?.id;
+    // ✅ 获取最新 Facebook 贴文中类型为 video 的贴文 ID
+    const feedRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/feed?fields=id,type,message,created_time&access_token=${PAGE_TOKEN}&limit=10`);
+    const feedData = await feedRes.json();
+    const postEntry = feedData?.data?.find(post => post.type === 'video');
+    const post_id = postEntry?.id;
+
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得贴文 ID', raw: postData });
+      return res.status(404).json({ error: '无法找到直播贴文（type=video）', raw: feedData });
     }
 
     // ✅ 获取上次记录的 Post ID
@@ -95,7 +97,7 @@ export default async function handler(req, res) {
         raw_message: message,
         price_raw,
         price,
-        ...(type === 'A' && { stock }), // ✅ 仅 A 类写入库存，未写则为 1
+        ...(type === 'A' && { stock }),
         created_at: new Date().toISOString(),
         post_id,
       });
