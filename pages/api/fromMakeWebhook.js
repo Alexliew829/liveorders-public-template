@@ -9,16 +9,6 @@ if (!getApps().length) {
 const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
-// ✅ 插入这段验证：兼容 EasyCron 的 URL 密钥
-const validateSecret = (req, res) => {
-  const cronSecret = req.headers['x-cron-secret'] || req.query.cron_secret;
-  if (cronSecret !== process.env.X_CRON_SECRET) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return false;
-  }
-  return true;
-};
-
 // ✅ 标准化编号，例如 a 32 → A032
 function normalizeSellingId(raw) {
   const match = raw.match(/[a-zA-Z]\s*[-_~.～]*\s*0*(\d{1,3})/);
@@ -43,9 +33,6 @@ function extractQuantity(message) {
 }
 
 export default async function handler(req, res) {
-  // ✅ 密钥验证（支持 EasyCron URL 方式）
-  if (!validateSecret(req, res)) return;
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '只允许 POST 请求' });
   }
