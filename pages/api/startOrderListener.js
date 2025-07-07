@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   try {
     // ✅ 获取最新直播视频贴文 ID（跳过图文贴）
-    const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?fields=id,created_time,description&access_token=${PAGE_TOKEN}&limit=5`);
+    const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?fields=id,created_time,description&access_token=${PAGE_TOKEN}&limit=5`);
     const videoData = await videoRes.json();
     const latestVideo = videoData?.data?.[0];
     const post_id = latestVideo?.id;
