@@ -17,14 +17,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 获取最新 Facebook 贴文中类型为 video 的贴文 ID
-    const feedRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/feed?fields=id,type,message,created_time&access_token=${PAGE_TOKEN}&limit=10`);
-    const feedData = await feedRes.json();
-    const postEntry = feedData?.data?.find(post => post.type === 'video');
-    const post_id = postEntry?.id;
+    // ✅ 获取最新直播视频贴文 ID（跳过图文贴）
+    const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?fields=id,created_time,description&access_token=${PAGE_TOKEN}&limit=5`);
+    const videoData = await videoRes.json();
+    const latestVideo = videoData?.data?.[0];
+    const post_id = latestVideo?.id;
 
     if (!post_id) {
-      return res.status(404).json({ error: '无法找到直播贴文（type=video）', raw: feedData });
+      return res.status(404).json({ error: '无法取得最新直播贴文 ID', raw: videoData });
     }
 
     // ✅ 获取上次记录的 Post ID
@@ -47,14 +47,14 @@ export default async function handler(req, res) {
       await batch2.commit();
     }
 
-    // ✅ 更新最新 Post ID
+    // ✅ 更新 config.post_id
     try {
       await configRef.set({ post_id });
     } catch (err) {
       return res.status(500).json({ error: '写入 config.post_id 失败', details: err.message });
     }
 
-    // ✅ 获取留言
+    // ✅ 获取留言（来自直播视频）
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
@@ -71,23 +71,20 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      // ✅ 提取价格与库存（如 RM32.32-200）
       const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})(?:[^0-9]*[-_~～. ]?(\d+))?\s*$/i);
       if (!priceMatch) continue;
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
 
-      // ✅ 没写库存就默认为 1（只针对 A 类）
       const stock = type === 'A'
         ? (priceMatch[2] ? parseInt(priceMatch[2]) : 50)
         : undefined;
 
-      // ✅ 提取商品名
       let name = message;
       name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
       name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}(?:[^0-9]*[-_~～. ]?\d+)?\s*$/i, '');
-      name = name.trim().slice(0, 30); // 最多30字
+      name = name.trim().slice(0, 30);
 
       await db.collection('live_products').doc(selling_id).set({
         selling_id,
@@ -106,7 +103,7 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      message: '商品写入完成',
+      message: '✅ 商品写入完成',
       post_id,
       success: count,
       skipped: comments.length - count,
@@ -114,7 +111,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error('错误：', err);
+    console.error('执行错误：', err);
     return res.status(500).json({ error: '执行失败', details: err.message });
   }
 }
