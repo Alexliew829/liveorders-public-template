@@ -83,17 +83,25 @@ export default async function handler(req, res) {
     };
 
     if (prefix === 'B') {
-      const docRef = db.collection('triggered_comments').doc(selling_id);
-      if (!isForce) {
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-          return res.status(200).json({ message: `编号 ${selling_id} 已被抢购（B 类限一人）` });
-        }
+      const existing = await db.collection('triggered_comments')
+        .where('selling_id', '==', selling_id)
+        .orderBy('created_at')
+        .limit(1)
+        .get();
+
+      if (!isForce && !existing.empty) {
+        return res.status(200).json({ message: `编号 ${selling_id} 已被抢购（B 类限一人）` });
       }
-      await docRef.set({ ...payloadBase, quantity: 1 });
-      return res.status(200).json({ message: '✅ B 类下单成功', doc_id: selling_id });
+
+      const docId = `${selling_id}_${comment_id}_${Date.now()}`;
+      await db.collection('triggered_comments').doc(docId).set({
+        ...payloadBase,
+        quantity: 1
+      });
+
+      return res.status(200).json({ message: '✅ B 类下单成功', doc_id: docId });
     } else {
-      const docId = `${selling_id}_${comment_id}_${Date.now()}`; // ✅ 确保 A 类重复留言也能写入
+      const docId = `${selling_id}_${comment_id}_${Date.now()}`; // ✅ A 类可重复写入
 
       const stock = product.stock || 0;
       if (stock > 0) {
