@@ -87,10 +87,7 @@ export default async function handler(req, res) {
     });
 
     // ✅ 简化公开留言内容
-   const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
-`;
-`;
-
+    const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
 
     // ✅ 留言公开回复付款详情
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
@@ -107,7 +104,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
-    // ✅ 成功发送后，更新该顾客所有留言为 replied_public: true
+    // ✅ 确保只有留言成功才更新 replied_public: true
     const batch = db.batch();
     orderSnap.docs.forEach(doc => {
       batch.update(doc.ref, { replied_public: true });
