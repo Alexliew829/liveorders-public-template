@@ -93,13 +93,7 @@ export default async function handler(req, res) {
       await docRef.set({ ...payloadBase, quantity: 1 });
       return res.status(200).json({ message: '✅ B 类下单成功', doc_id: selling_id });
     } else {
-      const docId = `${selling_id}_${comment_id}`;
-      if (!isForce) {
-        const existing = await db.collection('triggered_comments').doc(docId).get();
-        if (existing.exists) {
-          return res.status(200).json({ message: 'A 类订单已存在，跳过' });
-        }
-      }
+      const docId = `${selling_id}_${comment_id}_${Date.now()}`; // ✅ 确保 A 类重复留言也能写入
 
       const stock = product.stock || 0;
       if (stock > 0) {
