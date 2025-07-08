@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       const number = match[2].padStart(3, '0');
       const selling_id = `${type}${number}`;
 
-      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+(?:\.\d{2})?)(?:[^0-9]*[-_~～. ]?(\d+))?\s*$/i);
+      const priceMatch = message.match(/(?:RM|rm)?[^\d]*([\d,]+\.\d{2})(?:[^0-9]*[-_~～. ]?(\d+))?\s*$/i);
       if (!priceMatch) continue;
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
