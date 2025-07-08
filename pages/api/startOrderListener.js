@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 获取最新直播视频贴文 ID（跳过图文贴）
+    // ✅ 获取最新直播视频贴文 ID
     const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?fields=id,created_time,description&access_token=${PAGE_TOKEN}&limit=5`);
     const videoData = await videoRes.json();
     const latestVideo = videoData?.data?.[0];
@@ -27,39 +27,14 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: '无法取得最新直播贴文 ID', raw: videoData });
     }
 
-    // ✅ 获取上次记录的 Post ID
-    const configRef = db.collection('config').doc('last_post_id');
-    const configSnap = await configRef.get();
-    const last_post_id = configSnap.exists ? configSnap.data().post_id : null;
-    const isNewLive = last_post_id !== post_id;
-
-    // ✅ 清空 live_products（每次都清空）
-    const liveSnap = await db.collection('live_products').get();
-    const batch1 = db.batch();
-    liveSnap.forEach(doc => batch1.delete(doc.ref));
-    await batch1.commit();
-
-    // ✅ 如果是新直播，清空 triggered_comments
-    if (isNewLive) {
-      const orderSnap = await db.collection('triggered_comments').get();
-      const batch2 = db.batch();
-      orderSnap.forEach(doc => batch2.delete(doc.ref));
-      await batch2.commit();
-    }
-
-    // ✅ 更新 config.post_id
-    try {
-      await configRef.set({ post_id });
-    } catch (err) {
-      return res.status(500).json({ error: '写入 config.post_id 失败', details: err.message });
-    }
-
-    // ✅ 获取留言（来自直播视频）
+    // ✅ 获取留言
     const commentRes = await fetch(`https://graph.facebook.com/${post_id}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`);
     const commentData = await commentRes.json();
     const comments = commentData?.data || [];
 
     let count = 0;
+    const productList = [];
+
     for (const comment of comments) {
       const { message, id: comment_id, from } = comment;
       if (!message || !from || from.id !== PAGE_ID) continue;
@@ -76,7 +51,6 @@ export default async function handler(req, res) {
 
       const price_raw = parseFloat(priceMatch[1].replace(/,/g, ''));
       const price = price_raw.toLocaleString('en-MY', { minimumFractionDigits: 2 });
-
       const stock = type === 'A'
         ? (priceMatch[2] ? parseInt(priceMatch[2]) : 50)
         : undefined;
@@ -86,7 +60,7 @@ export default async function handler(req, res) {
       name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}(?:[^0-9]*[-_~～. ]?\d+)?\s*$/i, '');
       name = name.trim().slice(0, 30);
 
-      await db.collection('live_products').doc(selling_id).set({
+      productList.push({
         selling_id,
         type,
         number,
@@ -101,6 +75,44 @@ export default async function handler(req, res) {
 
       count++;
     }
+
+    // ✅ 如果留言中没有任何商品，就不写入 config，也不报错
+    if (count === 0) {
+      return res.status(200).json({
+        message: '⚠️ 没有侦测到任何商品资料，系统未写入任何数据',
+        post_id,
+        success: 0,
+        skipped: comments.length,
+      });
+    }
+
+    // ✅ 取得旧 ID，判断是否新直播
+    const configRef = db.collection('config').doc('last_post_id');
+    const configSnap = await configRef.get();
+    const last_post_id = configSnap.exists ? configSnap.data().post_id : null;
+    const isNewLive = last_post_id !== post_id;
+
+    // ✅ 清空 live_products
+    const liveSnap = await db.collection('live_products').get();
+    const batch1 = db.batch();
+    liveSnap.forEach(doc => batch1.delete(doc.ref));
+    await batch1.commit();
+
+    // ✅ 清空 triggered_comments（只在新直播时清空）
+    if (isNewLive) {
+      const orderSnap = await db.collection('triggered_comments').get();
+      const batch2 = db.batch();
+      orderSnap.forEach(doc => batch2.delete(doc.ref));
+      await batch2.commit();
+    }
+
+    // ✅ 写入商品资料
+    for (const product of productList) {
+      await db.collection('live_products').doc(product.selling_id).set(product);
+    }
+
+    // ✅ 成功写入商品后，才写入最新 Post ID
+    await configRef.set({ post_id });
 
     return res.status(200).json({
       message: '✅ 商品写入完成',
