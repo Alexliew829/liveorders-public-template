@@ -59,6 +59,7 @@ export default async function handler(req, res) {
       name = name.replace(/^[AB][ \-_.～]*0*\d{1,3}/i, '');
       name = name.replace(/\s*(RM|rm)?\s*[\d,]+\.\d{2}(?:[^0-9]*[-_~～. ]?\d+)?\s*$/i, '');
       name = name.trim().slice(0, 30);
+      if (!name) name = '未命名商品';
 
       productList.push({
         selling_id,
