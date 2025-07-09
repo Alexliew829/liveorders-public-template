@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const commentSnap = querySnap.docs[0];
     const commentData = commentSnap.data();
 
-    if (force !== 'yes' && commentData.replied_public === true) {
+    if (commentData.replied_public && force !== 'yes') {
       return res.status(200).json({
         success: false,
         message: '该顾客已发送过付款连接，若要重复发送请加上 &force=yes'
@@ -87,7 +87,10 @@ export default async function handler(req, res) {
     });
 
     // ✅ 简化公开留言内容
-    const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
+   const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
+`;
+`;
+
 
     // ✅ 留言公开回复付款详情
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
@@ -100,11 +103,11 @@ export default async function handler(req, res) {
     });
 
     const fbRes = await replyRes.json();
-    if (!replyRes.ok || fbRes.error) {
+    if (!replyRes.ok) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
-    // ✅ 只有留言成功后才更新 replied_public: true
+    // ✅ 成功发送后，更新该顾客所有留言为 replied_public: true
     const batch = db.batch();
     orderSnap.docs.forEach(doc => {
       batch.update(doc.ref, { replied_public: true });
