@@ -242,12 +242,12 @@
 
       let totalQty = 0;
       const detailLines = data.map(d => {
-        const price = parseFloat(d.price) || 0;
-        const quantity = parseInt(d.quantity) || 1;
-        totalQty += quantity;
-        const name = (d.user_name || '匿名顾客').slice(0, 14);
-        return `  ${name}  ${sellingId}  RM${price.toFixed(2)} x ${quantity}`;
-      });
+  const price = parseFloat(d.price) || 0;
+  const quantity = parseInt(d.quantity) || 1;
+  totalQty += quantity;
+  const name = (d.user_name || '匿名顾客').slice(0, 14);
+  return `  ${name}  ${sellingId}  RM${price.toFixed(2)} x ${quantity}`;
+});
 
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
       const popup = document.createElement('div');
