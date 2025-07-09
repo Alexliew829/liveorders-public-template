@@ -247,7 +247,6 @@
         totalQty += quantity;
         const name = (d.user_name || '匿名顾客').slice(0, 14); 
         return `  ${name} RM${price.toFixed(2)} x ${quantity}`;  // ✅ 更紧凑
-      });
 
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
       const popup = document.createElement('div');
