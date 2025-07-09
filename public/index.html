@@ -83,23 +83,24 @@
       flex-wrap: wrap;
     }
     .custom-popup {
-      background: white;
-      padding: 25px;
-      border-radius: 12px;
-      max-width: 98vw;
-      position: fixed;
-      top: 20px;
-      left: 1vw;
-      font-size: 23px;
-      font-family: monospace, sans-serif;
-      text-align: left;
-      line-height: 2;
-      font-weight: bold;
-      z-index: 9999;
-      max-height: 85vh;
-      overflow-y: auto;
-      color: red;
-    }
+  background: white;
+  padding: 25px;
+  padding-left: 1vw; /* 👈 加这一行，确保内容不贴边 */
+  border-radius: 12px;
+  max-width: 98vw;
+  position: fixed;
+  top: 20px;
+  left: 1vw;
+  font-size: 23px;
+  font-family: monospace, sans-serif;
+  text-align: left;
+  line-height: 2;
+  font-weight: bold;
+  z-index: 9999;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: red;
+}
     .popup-tip {
       position: fixed;
       top: 50px;
