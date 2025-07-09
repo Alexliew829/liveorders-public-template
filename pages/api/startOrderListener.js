@@ -17,14 +17,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ 获取最新直播视频贴文 ID
-    const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?fields=id,created_time,description&access_token=${PAGE_TOKEN}&limit=5`);
+    // ✅ 获取 Feed（图文或视频贴）中最新贴文
+    const feedRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/posts?fields=id,created_time&access_token=${PAGE_TOKEN}&limit=5`);
+    const feedData = await feedRes.json();
+    const latestFeedPost = feedData?.data?.[0];
+    let post_id = latestFeedPost?.id;
+
+    // ✅ 获取视频列表，判断 Feed 中的贴文是否是视频贴
+    const videoRes = await fetch(`https://graph.facebook.com/${PAGE_ID}/videos?fields=id,created_time&access_token=${PAGE_TOKEN}&limit=5`);
     const videoData = await videoRes.json();
-    const latestVideo = videoData?.data?.[0];
-    const post_id = latestVideo?.id;
+    const videoIds = (videoData?.data || []).map(v => v.id);
+
+    // ✅ 如果最新 Feed 贴文出现在视频列表中 → 使用视频 ID（可抓留言）
+    if (videoIds.includes(post_id)) {
+      post_id = videoIds[0]; // 使用最新视频 ID
+    }
 
     if (!post_id) {
-      return res.status(404).json({ error: '无法取得最新直播贴文 ID', raw: videoData });
+      return res.status(404).json({ error: '无法取得最新贴文 ID', raw: { feedData, videoData } });
     }
 
     // ✅ 获取留言
