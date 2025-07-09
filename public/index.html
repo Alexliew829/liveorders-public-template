@@ -86,10 +86,10 @@
       background: white;
       padding: 25px;
       border-radius: 12px;
-      width: 98vw;
       position: fixed;
       top: 20px;
       left: 1vw;
+      width: 98vw;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       font-size: 22px;
       text-align: left;
@@ -99,7 +99,6 @@
       max-height: 85vh;
       overflow-y: auto;
       color: red;
-      white-space: pre-wrap;
     }
     .popup-tip {
       position: fixed;
@@ -112,6 +111,27 @@
       border-radius: 8px;
       font-size: 16px;
       z-index: 10000;
+    }
+    .popup-actions {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .popup-actions button {
+      padding: 10px 24px;
+      font-size: 18px;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .popup-actions .copy {
+      background-color: #444;
+    }
+    .popup-actions .close {
+      background-color: #c0392b;
     }
   </style>
 </head>
@@ -245,21 +265,22 @@
         const price = parseFloat(d.price) || 0;
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
-        const name = (d.user_name || '匿名顾客').slice(0, 15);
-        return `${name} ${sellingId} RM${price.toFixed(2)} x ${quantity}`;
+        const name = (d.user_name || '匿名顾客').padEnd(15, '　');
+        return `${name}${sellingId}　RM${price.toFixed(2)} x ${quantity}`;
       });
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
 
       const popup = document.createElement('div');
       popup.className = 'custom-popup';
       popup.innerHTML = `
-        <div style="font-size:24px; margin-bottom:16px;">【${sellingId} 销售记录】</div>
-        <div>${detailLines.join('\n')}</div>
-        <div style="margin-top:16px;">📌 总数：${totalQty} 份</div>
-        <div style="display:flex; justify-content:space-between; margin-top:20px;">
-          <button class="action-button" style="flex:1; background:#444; margin-right:10px;" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
-          <button class="action-button" style="flex:1; background:#b22222;" onclick="this.closest('.custom-popup').remove()">关闭</button>
-        </div>`;
+        <div style="font-size:24px; text-align:center;">【${sellingId} 销售记录】</div>
+        <div style="margin-top:10px; white-space:pre-wrap; font-size:20px;">${detailLines.join('\n')}</div>
+        <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
+        <div class="popup-actions">
+          <button class="copy" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
+          <button class="close" onclick="this.closest('.custom-popup').remove()">关闭</button>
+        </div>
+      `;
       document.body.appendChild(popup);
     }
   </script>
