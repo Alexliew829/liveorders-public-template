@@ -235,19 +235,19 @@
       });
     }
 
-    async function showProductSummary(sellingId) {
+        async function showProductSummary(sellingId) {
       const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
       const data = await res.json();
       if (!Array.isArray(data)) return;
 
       let totalQty = 0;
       const detailLines = data.map(d => {
-  const price = parseFloat(d.price) || 0;
-  const quantity = parseInt(d.quantity) || 1;
-  totalQty += quantity;
-  const name = (d.user_name || '匿名顾客').slice(0, 14);
-  return `  ${name}  ${sellingId}  RM${price.toFixed(2)} x ${quantity}`;
-});
+        const price = parseFloat(d.price) || 0;
+        const quantity = parseInt(d.quantity) || 1;
+        totalQty += quantity;
+        const name = (d.user_name || '匿名顾客').slice(0, 14); 
+        return `  ${name} RM${price.toFixed(2)} x ${quantity}`;  // ✅ 更紧凑
+      });
 
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
       const popup = document.createElement('div');
@@ -258,10 +258,10 @@
 
       popup.innerHTML = `
         <strong style="font-size:24px; text-align:left; display:block;">【${sellingId} 销售记录】</strong>
-       <div style="margin-top:12px; text-align:left; font-size:18px; white-space:pre-wrap; padding-left:0px; line-height:1.8;">
+        <div style="margin-top:12px; text-align:left; font-size:18px; white-space:pre-wrap; padding-left:0px; line-height:1.8;">
           ${detailLines.join('\n')}
         </div>
-        <div style="font-size:20px; margin-top:12px; text-align:left; padding-left:4px;">📌 总数：${totalQty} 份</div>
+        <div style="font-size:20px; margin-top:12px; text-align:left; padding-left:0px;">📌 总数：${totalQty} 份</div>
         <div style="margin-top:16px; display:flex; justify-content:space-between;">
           <button class="action-button" style="background:#444; flex:1; margin-right:6px;" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
           <button class="action-button" style="background:#b22222; flex:1;" onclick="this.closest('.custom-popup').remove()">关闭</button>
@@ -269,6 +269,3 @@
       `;
       document.body.appendChild(popup);
     }
-  </script>
-</body>
-</html>
