@@ -245,7 +245,7 @@
         const price = parseFloat(d.price) || 0;
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
-        const name = (d.user_name || '匿名顾客').slice(0, 14).padEnd(14, ' ');
+        const name = (d.user_name || '匿名顾客').slice(0, 13).padEnd(13, ' ');
         return `${name} ${sellingId} RM${price.toFixed(2)} x ${quantity}`;
       });
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
