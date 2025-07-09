@@ -84,22 +84,20 @@
     }
     .custom-popup {
       background: white;
-      padding: 25px;
+      padding: 24px;
       border-radius: 12px;
-      width: 96vw;
+      width: 98vw;
       position: fixed;
       top: 20px;
-      left: 2vw;
+      left: 1vw;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
-      font-size: 20px;
+      font-size: 22px;
       text-align: left;
       font-weight: bold;
       z-index: 9999;
       max-height: 85vh;
       overflow-y: auto;
       color: red;
-      line-height: 1.8;
-      white-space: pre;
     }
     .popup-tip {
       position: fixed;
@@ -245,21 +243,18 @@
         const price = parseFloat(d.price) || 0;
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
-        const name = (d.user_name || '匿名顾客').slice(0, 14).padEnd(14, '　');
-        return `${name} ${sellingId}  RM${price.toFixed(2)} x ${quantity}`;
+        const name = (d.user_name || '匿名顾客').slice(0, 15).padEnd(15, '　');
+        return `${name} ${sellingId}　RM${price.toFixed(2)} x ${quantity}`;
       });
 
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
 
       const popup = document.createElement('div');
       popup.className = 'custom-popup';
-
       popup.innerHTML = `
-        <strong style="font-size:24px; display:block; margin-bottom:10px;">【${sellingId} 销售记录】</strong>
-        <div style="font-size:20px; margin-bottom:10px;">
-${detailLines.join('\n')}
-        </div>
-        <div style="font-size:20px;">📌 总数：${totalQty} 份</div>
+        <div style="font-size:24px;">【${sellingId} 销售记录】</div>
+        <div style="margin-top:6px; font-size:20px; white-space:pre-wrap; line-height:2;">${detailLines.join('\n')}</div>
+        <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
         <div style="margin-top:16px; display:flex; justify-content:space-between;">
           <button class="action-button" style="background:#444; flex:1; margin-right:6px;" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
           <button class="action-button" style="background:#b22222; flex:1;" onclick="this.closest('.custom-popup').remove()">关闭</button>
