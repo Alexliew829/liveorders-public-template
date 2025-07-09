@@ -83,29 +83,23 @@ export default async function handler(req, res) {
     };
 
     if (prefix === 'B') {
-      const existing = await db.collection('triggered_comments')
-        .where('selling_id', '==', selling_id)
-        .orderBy('created_at')
-        .limit(1)
-        .get();
-
-      if (!isForce && !existing.empty) {
-        const firstDoc = existing.docs[0];
-        const firstData = firstDoc.data();
-        if (firstData.comment_id !== comment_id && firstData.user_id !== user_id) {
+      const docRef = db.collection('triggered_comments').doc(selling_id);
+      if (!isForce) {
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
           return res.status(200).json({ message: `编号 ${selling_id} 已被抢购（B 类限一人）` });
         }
       }
-
-      const docId = `${selling_id}_${comment_id}_${Date.now()}`;
-      await db.collection('triggered_comments').doc(docId).set({
-        ...payloadBase,
-        quantity: 1
-      });
-
-      return res.status(200).json({ message: '✅ B 类下单成功', doc_id: docId });
+      await docRef.set({ ...payloadBase, quantity: 1 });
+      return res.status(200).json({ message: '✅ B 类下单成功', doc_id: selling_id });
     } else {
-      const docId = `${selling_id}_${comment_id}_${Date.now()}`; // ✅ A 类可重复写入
+      const docId = `${selling_id}_${comment_id}`;
+      if (!isForce) {
+        const existing = await db.collection('triggered_comments').doc(docId).get();
+        if (existing.exists) {
+          return res.status(200).json({ message: 'A 类订单已存在，跳过' });
+        }
+      }
 
       const stock = product.stock || 0;
       if (stock > 0) {
