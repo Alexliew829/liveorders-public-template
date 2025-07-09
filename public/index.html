@@ -86,7 +86,7 @@
       background: white;
       padding: 25px;
       border-radius: 12px;
-      max-width: 90%;
+      max-width: 96vw;
       position: fixed;
       top: 20px;
       left: 1vw;
@@ -166,7 +166,6 @@
     async function showPendingOrders() {
       const res = await fetch('/api/pendingOrders');
       const data = await res.json();
-
       const grouped = data.grouped || {};
       const orders = data.orders || [];
 
@@ -246,27 +245,20 @@
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
         const name = (d.user_name || '匿名顾客').slice(0, 14);
-        return `  ${name} RM${price.toFixed(2)} x ${quantity}`;
+        return `${name}　${sellingId}　RM${price.toFixed(2)} x ${quantity}`;
       });
-
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
+
       const popup = document.createElement('div');
       popup.className = 'custom-popup';
-      popup.style.width = '96vw';
-      popup.style.left = '1vw';
-      popup.style.transform = 'none';
-
       popup.innerHTML = `
         <strong style="font-size:24px; text-align:left; display:block;">【${sellingId} 销售记录】</strong>
-        <div style="margin-top:12px; text-align:left; font-size:18px; white-space:pre-wrap; padding-left:0px; line-height:1.8;">
+        <div style="margin-top:12px; text-align:left; font-size:18px; white-space:pre-wrap; line-height:1.8;">
           ${detailLines.join('\n')}
         </div>
-        <div style="font-size:20px; margin-top:12px; text-align:left; padding-left:0px;">📌 总数：${totalQty} 份</div>
+        <div style="font-size:20px; margin-top:12px; text-align:left;">📌 总数：${totalQty} 份</div>
         <div style="margin-top:16px; display:flex; justify-content:space-between;">
-          <button class="action-button" style="background:#444; flex:1; margin-right:6px;"
-            onclick="navigator.clipboard.writeText(\`${fullText.replace(/`/g, '\\`')}\`).then(showCopyTip)">
-            复制
-          </button>
+          <button class="action-button" style="background:#444; flex:1; margin-right:6px;" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
           <button class="action-button" style="background:#b22222; flex:1;" onclick="this.closest('.custom-popup').remove()">关闭</button>
         </div>
       `;
