@@ -99,6 +99,8 @@ export default async function handler(req, res) {
     });
 
     const fbRes = await replyRes.json();
+    console.log('Facebook 留言回传结果：', fbRes); // ✅ 打印结果
+
     if (!replyRes.ok) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
