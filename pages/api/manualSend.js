@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const commentSnap = querySnap.docs[0];
     const commentData = commentSnap.data();
 
-    if (commentData.replied_public && force !== 'yes') {
+    if (force !== 'yes' && commentData.replied_public === true) {
       return res.status(200).json({
         success: false,
         message: '该顾客已发送过付款连接，若要重复发送请加上 &force=yes'
@@ -100,11 +100,11 @@ export default async function handler(req, res) {
     });
 
     const fbRes = await replyRes.json();
-    if (!replyRes.ok) {
+    if (!replyRes.ok || fbRes.error) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
-    // ✅ 确保只有留言成功才更新 replied_public: true
+    // ✅ 只有留言成功后才更新 replied_public: true
     const batch = db.batch();
     orderSnap.docs.forEach(doc => {
       batch.update(doc.ref, { replied_public: true });
