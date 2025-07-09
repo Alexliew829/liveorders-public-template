@@ -90,7 +90,6 @@
       position: fixed;
       top: 20px;
       left: 1vw;
-      transform: none;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       font-size: 22px;
       text-align: left;
@@ -166,6 +165,7 @@
     async function showPendingOrders() {
       const res = await fetch('/api/pendingOrders');
       const data = await res.json();
+
       const grouped = data.grouped || {};
       const orders = data.orders || [];
 
@@ -244,19 +244,17 @@
         const price = parseFloat(d.price) || 0;
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
-        const name = (d.user_name || '匿名顾客').slice(0, 14);
-        return `${name}　${sellingId}　RM${price.toFixed(2)} x ${quantity}`;
+        const name = (d.user_name || '匿名顾客').slice(0, 14).padEnd(14, '　');
+        return `${name}${sellingId}  RM${price.toFixed(2)} x ${quantity}`;
       });
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
 
       const popup = document.createElement('div');
       popup.className = 'custom-popup';
       popup.innerHTML = `
-        <strong style="font-size:24px; text-align:left; display:block;">【${sellingId} 销售记录】</strong>
-        <div style="margin-top:12px; text-align:left; font-size:18px; white-space:pre-wrap; line-height:1.8;">
-          ${detailLines.join('\n')}
-        </div>
-        <div style="font-size:20px; margin-top:12px; text-align:left;">📌 总数：${totalQty} 份</div>
+        <strong style="font-size:24px">【${sellingId} 销售记录】</strong>
+        <div style="margin-top:12px; text-align:left; font-size:22px; white-space:pre-wrap">${detailLines.join('\n')}</div>
+        <div style="font-size:20px; margin-top:12px;">📌 总数：${totalQty} 份</div>
         <div style="margin-top:16px; display:flex; justify-content:space-between;">
           <button class="action-button" style="background:#444; flex:1; margin-right:6px;" onclick="navigator.clipboard.writeText(\`${fullText}\`).then(showCopyTip)">复制</button>
           <button class="action-button" style="background:#b22222; flex:1;" onclick="this.closest('.custom-popup').remove()">关闭</button>
