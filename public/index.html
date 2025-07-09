@@ -89,8 +89,8 @@
       max-width: 90%;
       position: fixed;
       top: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateX(-16px);
+      left: 1vw;
+      transform: none;
       box-shadow: 0 0 15px rgba(0,0,0,0.2);
       font-size: 22px;
       text-align: left;
@@ -263,7 +263,10 @@
         </div>
         <div style="font-size:20px; margin-top:12px; text-align:left; padding-left:0px;">📌 总数：${totalQty} 份</div>
         <div style="margin-top:16px; display:flex; justify-content:space-between;">
-          <button class="action-button" style="background:#444; flex:1; margin-right:6px;" onclick="navigator.clipboard.writeText(` + "`" + fullText + "`").then(showCopyTip)">复制</button>
+          <button class="action-button" style="background:#444; flex:1; margin-right:6px;"
+            onclick="navigator.clipboard.writeText(\`${fullText.replace(/`/g, '\\`')}\`).then(showCopyTip)">
+            复制
+          </button>
           <button class="action-button" style="background:#b22222; flex:1;" onclick="this.closest('.custom-popup').remove()">关闭</button>
         </div>
       `;
