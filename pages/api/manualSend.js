@@ -87,16 +87,12 @@ export default async function handler(req, res) {
     });
 
     // ✅ 简化公开留言内容
-   const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
-`;
-`;
+    const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
 
-
-    // ✅ 留言公开回复付款详情
+    // ✅ 留言公开回复付款详情（修正后的版本）
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         message: paymentMessage,
         access_token: PAGE_TOKEN
       })
