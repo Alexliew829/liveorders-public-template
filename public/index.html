@@ -235,7 +235,7 @@
       });
     }
 
-        async function showProductSummary(sellingId) {
+           async function showProductSummary(sellingId) {
       const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
       const data = await res.json();
       if (!Array.isArray(data)) return;
@@ -246,7 +246,8 @@
         const quantity = parseInt(d.quantity) || 1;
         totalQty += quantity;
         const name = (d.user_name || '匿名顾客').slice(0, 14); 
-        return `  ${name} RM${price.toFixed(2)} x ${quantity}`;  // ✅ 更紧凑
+        return `  ${name} RM${price.toFixed(2)} x ${quantity}`;
+      }); // ✅ 补上这个 map 的结束括号
 
       const fullText = detailLines.join('\n') + `\n\n📌 总数：${totalQty} 份`;
       const popup = document.createElement('div');
