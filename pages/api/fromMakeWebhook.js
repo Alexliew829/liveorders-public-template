@@ -90,7 +90,11 @@ export default async function handler(req, res) {
         .get();
 
       if (!isForce && !existing.empty) {
-        return res.status(200).json({ message: `编号 ${selling_id} 已被抢购（B 类限一人）` });
+        const firstDoc = existing.docs[0];
+        const firstData = firstDoc.data();
+        if (firstData.comment_id !== comment_id && firstData.user_id !== user_id) {
+          return res.status(200).json({ message: `编号 ${selling_id} 已被抢购（B 类限一人）` });
+        }
       }
 
       const docId = `${selling_id}_${comment_id}_${Date.now()}`;
