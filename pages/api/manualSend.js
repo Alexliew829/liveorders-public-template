@@ -85,7 +85,7 @@ export default async function handler(req, res) {
 
     const paymentMessage = `🙏 感谢你的支持\n📩 已通过 Messenger 发出付款详情，请查阅 inbox。\n📬 https://m.me/lover.legend.gardening`;
 
-    // ✅ 修复：加上 Content-Type header，确保留言内容被正确发送
+    // ✅ 添加 Content-Type 确保留言能成功送达
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -95,10 +95,10 @@ export default async function handler(req, res) {
       })
     });
 
-    const fbRes = await replyRes.json();
-    console.log('Facebook 留言回传结果：', fbRes);
+    const fbRes = await replyRes.json();  // ✅ 无论成功或失败，都打印日志以调试
+    console.log('Facebook 留言回传结果：', JSON.stringify(fbRes, null, 2));
 
-    if (!replyRes.ok) {
+    if (!replyRes.ok || fbRes.error) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
