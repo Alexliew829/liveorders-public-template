@@ -87,8 +87,7 @@ export default async function handler(req, res) {
     });
 
     // ✅ 修正留言内容，不只包含链接，避免“View 1 reply”却看不到内容
-    const paymentMessage = `🙏 感谢你的支持 🙏\n已通过 Messenger 发出付款详情，请查阅 Inbox 收件箱。\nPlease check your Messenger inbox for payment info.`;
-
+    const paymentMessage = `🙏 感谢你的支持 🙏\n付款详情已通过 Messenger 发出，请查阅 Inbox。\n📬 https://m.me/lover.legend.gardening`;
     // ✅ 留言公开回复付款详情
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
