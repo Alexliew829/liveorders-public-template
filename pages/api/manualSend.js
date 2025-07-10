@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 查找该顾客的留言记录
+    // ✅ 查找该顾客的留言记录
     const querySnap = await db
       .collection('triggered_comments')
       .where('comment_id', '==', comment_id)
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     const { user_id, user_name } = commentData;
 
-    // 查找该顾客所有订单
+    // ✅ 查找该顾客的所有订单
     const orderSnap = await db
       .collection('triggered_comments')
       .where('user_id', '==', user_id)
@@ -65,11 +65,11 @@ export default async function handler(req, res) {
       total = +(total + subtotal).toFixed(2);
     }
 
-    // ✅ 留言贴在主贴文下 + Tag 顾客
+    // ✅ 构建留言内容（主贴文 + 可见 + 含链接 + tag）
     const suffix = `#${Date.now().toString().slice(-5)}`;
     const tagged = user_id ? `@[${user_id}] ${user_name}` : user_name || '顾客';
-    const message = `感谢 ${tagged} 🙏\n付款详情已通过 Messenger 发出，请查阅收件箱。\nThank you! Payment info sent via Messenger inbox. ${suffix}`;
-
+    const message = `感谢支持 ${tagged} 🙏\n我们已通过 Messenger 发出付款详情，请点击查看：\nhttps://m.me/lover.legend.gardening. ${suffix}`;
+    // ✅ 留言在主贴文下，确保对访客可见
     const replyRes = await fetch(`https://graph.facebook.com/${post_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: '发送失败：无法留言主贴文', fbRes });
     }
 
-    // ✅ 更新所有留言为已公开回复
+    // ✅ 更新数据库状态为已公开留言
     const batch = db.batch();
     orderSnap.docs.forEach(doc => {
       batch.update(doc.ref, { replied_public: true });
