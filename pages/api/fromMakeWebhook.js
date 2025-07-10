@@ -21,7 +21,7 @@ function normalizeSellingId(raw) {
 // ✅ 提取留言中的数量，支持 +10 / x2 / *3 等格式
 function extractQuantity(message) {
   let qty = 1;
-  const matches = message.match(/(?:[+xX*×－\-–])\s*(\d{1,3})/gi);
+  const matches = message.match(/(?:[+xX*×－\-\u2013])\s*(\d{1,3})/gi);
   if (matches && matches.length > 0) {
     const nums = matches.map(m => parseInt(m.replace(/[^\d]/g, ''))).filter(n => !isNaN(n));
     if (nums.length > 0) {
@@ -42,7 +42,12 @@ export default async function handler(req, res) {
     const isForce = force === true || force === 'true';
 
     if (!post_id || !comment_id || !message) {
+      console.warn('⛔ 缺少字段', { post_id, comment_id, message });
       return res.status(400).json({ error: '缺少必要字段：post_id / comment_id / message' });
+    }
+
+    if (!user_id) {
+      console.warn('⚠️ 未提供 user_id，可能为陌生访客', { comment_id, message });
     }
 
     if (user_id === PAGE_ID) {
@@ -74,7 +79,7 @@ export default async function handler(req, res) {
       comment_id,
       message,
       user_id: user_id || '',
-      user_name: user_name || '',
+      user_name: user_name || `访客_${comment_id.slice(-4)}`,
       created_at: Date.now(),
       replied: false,
       selling_id,
@@ -102,6 +107,8 @@ export default async function handler(req, res) {
       }
 
       const stock = product.stock || 0;
+      let stockLimited = false;
+
       if (stock > 0) {
         const querySnap = await db.collection('triggered_comments')
           .where('selling_id', '==', selling_id)
@@ -120,11 +127,14 @@ export default async function handler(req, res) {
         } else if (totalOrdered + quantity > stock) {
           quantity = stock - totalOrdered;
         }
+
+        stockLimited = true;
       }
 
       await db.collection('triggered_comments').doc(docId).set({
         ...payloadBase,
-        quantity
+        quantity,
+        stock_limited: stockLimited
       });
 
       return res.status(200).json({
