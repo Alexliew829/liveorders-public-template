@@ -68,8 +68,7 @@ export default async function handler(req, res) {
     // ✅ 构建留言内容（在顾客原留言下方留言）
     const suffix = `#${Date.now().toString().slice(-5)}`;
     const tagged = user_id ? `@[${user_id}] ${user_name}` : user_name || '顾客';
-    const message = `感谢支持 ${tagged} 🙏\n我们已通过 Messenger 发出付款详情，请点击查看：\nhttps://m.me/lover.legend.gardening ${suffix}`;
-
+    const message = `感谢支持 🙏 请查阅Inbox，已发送订单和付款详情`;
     // ✅ 改为在 comment_id 下留言，确保顾客可见
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
