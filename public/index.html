@@ -237,6 +237,7 @@
     }
 
     async function showProductSummary(sellingId) {
+  document.querySelectorAll('.custom-popup')?.forEach(p => p.remove());
       const res = await fetch(`/api/productSummary?selling_id=${sellingId}`);
       const data = await res.json();
       if (!Array.isArray(data)) return;
