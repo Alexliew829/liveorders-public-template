@@ -83,9 +83,9 @@ export default async function handler(req, res) {
       return numA - numB;
     });
 
-    // ✅ 自动添加随机尾巴，防止 Facebook 屏蔽重复留言
-    const suffix = `#${Date.now().toString().slice(-5)}`; // 例如：#36123
-    const paymentMessage = `🙏 感谢你的支持\n📩 已通过 Messenger 发出付款详情，请查阅 inbox。\n📬 https://m.me/lover.legend.gardening\n${suffix}`;
+    // ✅ 留言内容：不含链接 + 不以 emoji 开头 + 中英并列
+    const suffix = `#${Date.now().toString().slice(-5)}`; // 可保留用于防重复
+    const paymentMessage = `感谢你的支持，我们已通过 Messenger 发出付款详情，请查阅收件箱。\nThank you for your support! Payment info has been sent via Messenger inbox. ${suffix}`;
 
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
