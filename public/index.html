@@ -83,24 +83,24 @@
       flex-wrap: wrap;
     }
     .custom-popup {
-  background: white;
-  padding: 25px;
-  padding-left: 0.5vw; /* 👈 加这一行，确保内容不贴边 */
-  border-radius: 12px;
-  max-width: 98vw;
-  position: fixed;
-  top: 20px;
-  left: 1vw;
-  font-size: 22px;
-  font-family: monospace, sans-serif;
-  text-align: left;
-  line-height: 2;
-  font-weight: bold;
-  z-index: 9999;
-  max-height: 85vh;
-  overflow-y: auto;
-  color: red;
-}
+      background: white;
+      padding: 25px;
+      padding-left: 0.5vw;
+      border-radius: 12px;
+      max-width: 98vw;
+      position: fixed;
+      top: 20px;
+      left: 1vw;
+      font-size: 22px;
+      font-family: monospace, sans-serif;
+      text-align: left;
+      line-height: 2;
+      font-weight: bold;
+      z-index: 9999;
+      max-height: 85vh;
+      overflow-y: auto;
+      color: red;
+    }
     .popup-tip {
       position: fixed;
       top: 50px;
@@ -196,7 +196,7 @@
           <strong>${order.user_name}</strong>
           <div class="message-box">${order.message}</div>
           <div class="inline-buttons">
-            <button class="action-button send-btn" data-id="${order.comment_id}" data-sent="${order.replied_public ? 'true' : 'false'}">公开发送</button>
+            <button class="action-button send-btn" data-id="${order.comment_id}" data-post="${order.post_id}" data-sent="${order.replied_public ? 'true' : 'false'}">公开发送</button>
             <button class="action-button" style="background-color:#888;" onclick="copyMessage(this)">私发复制</button>
           </div>`;
         orderResults.appendChild(div);
@@ -211,7 +211,8 @@
           if (sentBefore && !confirm('⚠️ 已发送过，确定再次发送？')) return;
 
           const commentId = btn.dataset.id;
-          const res = await fetch(`/api/manualSend?comment_id=${commentId}&force=yes`);
+          const postId = btn.dataset.post;
+          const res = await fetch(`/api/manualSend?comment_id=${commentId}&post_id=${postId}&force=yes`);
           const data = await res.json();
           if (data.success) {
             btn.innerText = "✅ 已发送";
