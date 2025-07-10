@@ -19,7 +19,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 查找该顾客的订单留言
     const querySnap = await db
       .collection('triggered_comments')
       .where('comment_id', '==', comment_id)
@@ -42,7 +41,6 @@ export default async function handler(req, res) {
 
     const { user_id, user_name } = commentData;
 
-    // 查找此顾客的所有订单
     const orderSnap = await db
       .collection('triggered_comments')
       .where('user_id', '==', user_id)
@@ -76,7 +74,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // ✅ 排序 A类在前，B类在后，编号顺序
     productLines.sort((a, b) => {
       const typeA = /^[Aa]/.test(a.sid) ? 'A' : 'B';
       const typeB = /^[Aa]/.test(b.sid) ? 'A' : 'B';
@@ -86,28 +83,25 @@ export default async function handler(req, res) {
       return numA - numB;
     });
 
-    // ✅ 简化公开留言内容
-   const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
-`;
-`;
+    const paymentMessage = `🙏 感谢你的支持\n📩 已通过 Messenger 发出付款详情，请查阅 inbox。\n📬 https://m.me/lover.legend.gardening`;
 
-
-    // ✅ 留言公开回复付款详情
+    // ✅ 修复：加上 Content-Type header，确保留言内容被正确发送
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
         message: paymentMessage,
         access_token: PAGE_TOKEN
       })
     });
 
     const fbRes = await replyRes.json();
+    console.log('Facebook 留言回传结果：', fbRes);
+
     if (!replyRes.ok) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
     }
 
-    // ✅ 成功发送后，更新该顾客所有留言为 replied_public: true
     const batch = db.batch();
     orderSnap.docs.forEach(doc => {
       batch.update(doc.ref, { replied_public: true });
