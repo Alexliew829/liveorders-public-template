@@ -65,13 +65,13 @@ export default async function handler(req, res) {
       total = +(total + subtotal).toFixed(2);
     }
 
-    // ✅ 构建留言内容（主贴文 + 可见 + 含链接 + tag）
+    // ✅ 构建留言内容（在顾客原留言下方留言）
     const suffix = `#${Date.now().toString().slice(-5)}`;
     const tagged = user_id ? `@[${user_id}] ${user_name}` : user_name || '顾客';
     const message = `感谢支持 ${tagged} 🙏\n我们已通过 Messenger 发出付款详情，请点击查看：\nhttps://m.me/lover.legend.gardening ${suffix}`;
 
-    // ✅ 留言在主贴文下，确保对访客可见
-    const replyRes = await fetch(`https://graph.facebook.com/${post_id}/comments`, {
+    // ✅ 改为在 comment_id 下留言，确保顾客可见
+    const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -81,10 +81,10 @@ export default async function handler(req, res) {
     });
 
     const fbRes = await replyRes.json();
-    console.log('Facebook 留言贴文结果：', JSON.stringify(fbRes, null, 2));
+    console.log('Facebook 留言回传结果：', JSON.stringify(fbRes, null, 2));
 
     if (!replyRes.ok || fbRes.error) {
-      return res.status(500).json({ error: '发送失败：无法留言主贴文', fbRes });
+      return res.status(500).json({ error: '发送失败：无法回复该留言', fbRes });
     }
 
     // ✅ 更新数据库状态为已公开留言
@@ -96,7 +96,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: `已在贴文留言成功通知 ${user_name || '顾客'}`,
+      message: `已回复留言成功通知 ${user_name || '顾客'}`,
       total: total.toFixed(2),
       fbRes
     });
