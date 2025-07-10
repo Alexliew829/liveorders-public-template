@@ -27,61 +27,71 @@ export default async function handler(req, res) {
   }
 
   let totalQty = 0;
-  let totalAmount = 0;
+  let startRowIdx = 2; // 从第2行开始（因为第1行为标题）
 
   const borderThin = { style: 'thin', color: { argb: 'FF000000' } };
   const borderDouble = { style: 'double', color: { argb: 'FF000000' } };
 
   for (const [customer, orders] of Object.entries(grouped)) {
+    const start = sheet.rowCount + 1;
     let subQty = 0;
-    let subTotal = 0;
 
     for (const order of orders) {
       const { selling_id, product_name, price, quantity = 1 } = order;
-      const priceNum = Number(price);
-      const total = priceNum * Number(quantity);
       subQty += Number(quantity);
-      subTotal += total;
 
       const row = sheet.addRow([
         customer,
         selling_id,
         product_name,
         quantity,
-        priceNum,
-        total,
-        ''  // ✅ 不在每个商品行显示“已发送连接”
+        Number(price),
+        null, // 等下插入公式
+        ''
       ]);
-      row.font = { name: 'Calibri', size: 12 };
+      const rowNumber = row.number;
+
+      // 设置公式（总数 = 数量 * 价格）
+      row.getCell(6).value = {
+        formula: `D${rowNumber}*E${rowNumber}`
+      };
       row.getCell(5).numFmt = '#,##0.00';
       row.getCell(6).numFmt = '#,##0.00';
+      row.font = { name: 'Calibri', size: 12 };
     }
 
-    const replied = orders[0].replied_public; // ✅ 改为判断公开留言是否已发送
+    const end = sheet.rowCount;
+    const replied = orders[0].replied_public;
+
     const subtotalRow = sheet.addRow([
-      '', '', '', subQty, '', subTotal,
-      replied ? '✔' : '✘'  // ✅ 小计行才显示是否已发送
+      '', '', '', subQty, '',
+      { formula: `SUM(F${start}:F${end})` },
+      replied ? '✔' : '✘'
     ]);
     subtotalRow.font = { name: 'Calibri', size: 12 };
     subtotalRow.getCell(6).numFmt = '#,##0.00';
 
     [4, 5, 6].forEach(col => {
-      const cell = subtotalRow.getCell(col);
-      cell.border = {
+      subtotalRow.getCell(col).border = {
         top: borderThin,
         bottom: borderDouble,
       };
     });
 
     totalQty += subQty;
-    totalAmount += subTotal;
-
     sheet.addRow([]);
   }
 
-  const totalRow = sheet.addRow(['✔ 总计:', '', '', totalQty, '', totalAmount, '']);
+  const totalRowNumber = sheet.rowCount + 1;
+
+  const totalRow = sheet.addRow([
+    '✔ 总计:', '', '', totalQty, '',
+    { formula: `SUM(F2:F${totalRowNumber - 1})` },
+    ''
+  ]);
   totalRow.font = { name: 'Calibri', size: 12, bold: true };
   totalRow.getCell(6).numFmt = '#,##0.00';
+
   [4, 6].forEach(col => {
     totalRow.getCell(col).border = {
       top: borderThin,
@@ -89,7 +99,7 @@ export default async function handler(req, res) {
     };
   });
 
-  // ✅ 自动列宽 + 指定固定宽度
+  // ✅ 自动列宽
   sheet.columns.forEach((col, index) => {
     let maxLength = 10;
     col.eachCell(cell => {
@@ -97,17 +107,9 @@ export default async function handler(req, res) {
       maxLength = Math.max(maxLength, val.length + 2);
     });
 
-    if (index === 2) { // C栏 商品名称
-      maxLength = 21;
-    }
-
-    if (index === 6 && maxLength < 8) {
-      maxLength = 10; // F栏 总数
-    }
-
-    if (index === 7) {
-      maxLength = 15; // G栏“已发送连接”
-    }
+    if (index === 2) maxLength = 21;
+    if (index === 6 && maxLength < 8) maxLength = 10;
+    if (index === 7) maxLength = 15;
 
     col.width = maxLength;
   });
