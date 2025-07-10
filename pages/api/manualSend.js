@@ -83,9 +83,10 @@ export default async function handler(req, res) {
       return numA - numB;
     });
 
-    const paymentMessage = `🙏 感谢你的支持\n📩 已通过 Messenger 发出付款详情，请查阅 inbox。\n📬 https://m.me/lover.legend.gardening`;
+    // ✅ 自动添加随机尾巴，防止 Facebook 屏蔽重复留言
+    const suffix = `#${Date.now().toString().slice(-5)}`; // 例如：#36123
+    const paymentMessage = `🙏 感谢你的支持\n📩 已通过 Messenger 发出付款详情，请查阅 inbox。\n📬 https://m.me/lover.legend.gardening\n${suffix}`;
 
-    // ✅ 添加 Content-Type 确保留言能成功送达
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
       })
     });
 
-    const fbRes = await replyRes.json();  // ✅ 无论成功或失败，都打印日志以调试
+    const fbRes = await replyRes.json();
     console.log('Facebook 留言回传结果：', JSON.stringify(fbRes, null, 2));
 
     if (!replyRes.ok || fbRes.error) {
