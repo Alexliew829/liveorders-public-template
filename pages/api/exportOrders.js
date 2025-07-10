@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   }
 
   let totalQty = 0;
-  let startRowIdx = 2; // 从第2行开始（因为第1行为标题）
+  const totalFormula = []; // ✅ 收集商品行的 F列公式引用
 
   const borderThin = { style: 'thin', color: { argb: 'FF000000' } };
   const borderDouble = { style: 'double', color: { argb: 'FF000000' } };
@@ -46,15 +46,15 @@ export default async function handler(req, res) {
         product_name,
         quantity,
         Number(price),
-        null, // 等下插入公式
+        null,
         ''
       ]);
       const rowNumber = row.number;
 
-      // 设置公式（总数 = 数量 * 价格）
-      row.getCell(6).value = {
-        formula: `D${rowNumber}*E${rowNumber}`
-      };
+      // ✅ 设置公式（数量 × 单价）
+      row.getCell(6).value = { formula: `D${rowNumber}*E${rowNumber}` };
+      totalFormula.push(`F${rowNumber}`); // ✅ 加入总计公式引用
+
       row.getCell(5).numFmt = '#,##0.00';
       row.getCell(6).numFmt = '#,##0.00';
       row.font = { name: 'Calibri', size: 12 };
@@ -82,11 +82,10 @@ export default async function handler(req, res) {
     sheet.addRow([]);
   }
 
-  const totalRowNumber = sheet.rowCount + 1;
-
+  // ✅ 总计行：用 F2+F3+F5... 的方式组合公式
   const totalRow = sheet.addRow([
     '✔ 总计:', '', '', totalQty, '',
-    { formula: `SUM(F2:F${totalRowNumber - 1})` },
+    { formula: totalFormula.join('+') },
     ''
   ]);
   totalRow.font = { name: 'Calibri', size: 12, bold: true };
