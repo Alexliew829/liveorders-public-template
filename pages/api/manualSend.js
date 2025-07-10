@@ -86,10 +86,10 @@ export default async function handler(req, res) {
       return numA - numB;
     });
 
-    // ✅ 简化公开留言内容
-    const paymentMessage = `🙏 感谢你的支持\n📩 我已通过 Messenger 发送付款详情，请查阅 Inbox\n📬https://m.me/lover.legend.gardening`;
+    // ✅ 修正留言内容，不只包含链接，避免“View 1 reply”却看不到内容
+    const paymentMessage = `🙏 感谢你的支持 🙏\n已通过 Messenger 发出付款详情，请查阅 Inbox 收件箱。\nPlease check your Messenger inbox for payment info.`;
 
-    // ✅ 留言公开回复付款详情（修正后的版本）
+    // ✅ 留言公开回复付款详情
     const replyRes = await fetch(`https://graph.facebook.com/${comment_id}/comments`, {
       method: 'POST',
       body: new URLSearchParams({
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
     });
 
     const fbRes = await replyRes.json();
-    console.log('Facebook 留言回传结果：', fbRes); // ✅ 打印结果
+    console.log('Facebook 留言回传结果：', fbRes);
 
     if (!replyRes.ok) {
       return res.status(500).json({ error: '发送失败：无法公开回复订单详情', fbRes });
