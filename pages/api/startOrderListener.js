@@ -1,3 +1,4 @@
+
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
       const { message, id: comment_id, from } = comment;
       if (!message || !from || from.id !== PAGE_ID) continue;
 
-      const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})\b/i);
+    const match = message.match(/\b([AB])[ \-_.～]*0*(\d{1,3})(?:[+×xX*]\d+)?\b/i);
       if (!match) continue;
 
       const type = match[1].toUpperCase();
