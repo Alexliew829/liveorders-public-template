@@ -54,12 +54,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '已忽略主页留言' });
     }
 
-    const match = message.match(/[aAbB][\s\-_.～]*0{0,2}(\d{1,3})/);
+    const match = message.match(/\b([aAbB])[\s\-_.～]*0*(\d{1,3})\b/);
     if (!match) {
       return res.status(200).json({ message: '无有效商品编号，跳过处理' });
     }
 
-    const selling_id = normalizeSellingId(match[0]);
+    const selling_id = normalizeSellingId(`${match[1]}${match[2]}`);
     const prefix = selling_id[0];
     let quantity = extractQuantity(message);
 
