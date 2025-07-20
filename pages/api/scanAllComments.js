@@ -56,6 +56,8 @@ export default async function handler(req, res) {
     const post_id = configSnap.data().post_id;
     const comments = await fetchAllComments(post_id);
 
+    console.log(`✅ 共抓取留言数：${comments.length}`);
+
     // ✅ 删除旧 triggered_comments
     const oldDocs = await db.collection('triggered_comments').listDocuments();
     const deletePromises = oldDocs.map(doc => doc.delete());
@@ -80,9 +82,10 @@ export default async function handler(req, res) {
       if (!productSnap.exists) { skipped++; continue; }
       const product = productSnap.data();
 
-      const cleanPrice = typeof product.price === 'string'
-        ? parseFloat(product.price.replace(/,/g, ''))
-        : product.price || 0;
+      const rawPrice = product.price;
+      const cleanPrice = typeof rawPrice === 'string'
+        ? parseFloat(rawPrice.replace(/,/g, '').replace(/[^0-9.]/g, '')) || 0
+        : parseFloat(rawPrice) || 0;
 
       const payload = {
         post_id,
@@ -141,6 +144,7 @@ export default async function handler(req, res) {
       total: comments.length
     });
   } catch (err) {
-    return res.status(500).json({ error: '系统错误', details: err.message });
+    console.error('❌ 扫描留言失败:', err);
+    return res.status(500).json({ error: '系统错误，请稍后再试', details: err.message });
   }
 }
