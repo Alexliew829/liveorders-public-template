@@ -12,7 +12,7 @@ const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 // ✅ 标准化编号，例如 a 32 → A032
 function normalizeSellingId(raw) {
-  const match = raw.match(/([aAbB])[\s\-_.～]*0*(\d{1,3})/);
+  const match = raw.match(/([aAbB])[ \-_.~〜]*0*(\d{1,3})/);
   if (!match) return null;
   const letter = match[1].toUpperCase();
   const number = match[2].padStart(3, '0');
@@ -56,6 +56,11 @@ export default async function handler(req, res) {
     const post_id = configSnap.data().post_id;
     const comments = await fetchAllComments(post_id);
 
+    // ✅ 删除旧 triggered_comments
+    const oldDocs = await db.collection('triggered_comments').listDocuments();
+    const deletePromises = oldDocs.map(doc => doc.delete());
+    await Promise.all(deletePromises);
+
     let added = 0, skipped = 0, ignored = 0;
 
     for (const comment of comments) {
@@ -93,17 +98,9 @@ export default async function handler(req, res) {
       };
 
       if (prefix === 'B') {
-        // 限一人下单，不能重复写入
-        const docRef = db.collection('triggered_comments').doc(selling_id);
-        const docSnap = await docRef.get();
-        if (!docSnap.exists) {
-          await docRef.set({ ...payload, quantity: 1 });
-          added++;
-        } else {
-          skipped++;
-        }
+        await db.collection('triggered_comments').doc(selling_id).set({ ...payload, quantity: 1 });
+        added++;
       } else {
-        // A 类商品：可重复下单
         const docId = `${selling_id}_${comment_id}`;
         const stock = product.stock || 0;
         let stockLimited = false;
@@ -131,15 +128,13 @@ export default async function handler(req, res) {
         }
 
         payload.stock_limited = stockLimited;
-
-        // ✅ 强制写入，不判断是否已存在
         await db.collection('triggered_comments').doc(docId).set(payload);
         added++;
       }
     }
 
     return res.status(200).json({
-      message: `✅ 补扫完成，共新增 ${added} 条订单`,
+      message: `✅ 补扫完成，共新增 ${added} 条订单（旧记录已覆盖）`,
       added,
       skipped,
       ignored,
