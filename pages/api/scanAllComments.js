@@ -1,4 +1,3 @@
-// pages/api/scanAllComments.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -11,24 +10,27 @@ const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
+// ✅ 标准化编号，例如 a 32 → A032
 function normalizeSellingId(raw) {
-  const match = raw.match(/[a-zA-Z]\s*[-_~.\uFF5E]*\s*0*(\d{1,3})/);
-  if (!match) return raw.trim().toUpperCase();
-  const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
-  const num = match[1].padStart(3, '0');
-  return `${letter}${num}`;
+  const match = raw.match(/([aAbB])[\s\-_.～]*0*(\d{1,3})/);
+  if (!match) return null;
+  const letter = match[1].toUpperCase();
+  const number = match[2].padStart(3, '0');
+  return `${letter}${number}`;
 }
 
+// ✅ 提取数量（支持 +2, x3, ×4, *5, -6 等格式）
 function extractQuantity(message) {
   let qty = 1;
   const matches = message.match(/(?:[+xX*\u00D7\uFF0D\-\u2013])\s*(\d{1,3})/gi);
-  if (matches && matches.length > 0) {
+  if (matches?.length) {
     const nums = matches.map(m => parseInt(m.replace(/[^\d]/g, ''))).filter(n => !isNaN(n));
     if (nums.length > 0) qty = Math.max(...nums);
   }
   return qty;
 }
 
+// ✅ 分页抓取所有留言
 async function fetchAllComments(postId) {
   const allComments = [];
   let next = `https://graph.facebook.com/${postId}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`;
@@ -60,10 +62,9 @@ export default async function handler(req, res) {
       const { id: comment_id, message, from } = comment;
       if (!message || !from || from.id === PAGE_ID) { ignored++; continue; }
 
-      const match = message.match(/[aAbB][\s\-_.～]*0{0,2}(\d{1,3})/);
-      if (!match) { skipped++; continue; }
+      const selling_id = normalizeSellingId(message);
+      if (!selling_id) { skipped++; continue; }
 
-      const selling_id = normalizeSellingId(match[0]);
       const prefix = selling_id[0];
       const quantity = extractQuantity(message);
       const user_id = from.id;
@@ -92,6 +93,7 @@ export default async function handler(req, res) {
       };
 
       if (prefix === 'B') {
+        // 限一人下单，不能重复写入
         const docRef = db.collection('triggered_comments').doc(selling_id);
         const docSnap = await docRef.get();
         if (!docSnap.exists) {
@@ -101,8 +103,8 @@ export default async function handler(req, res) {
           skipped++;
         }
       } else {
+        // A 类商品：可重复下单
         const docId = `${selling_id}_${comment_id}`;
-
         const stock = product.stock || 0;
         let stockLimited = false;
 
@@ -130,7 +132,7 @@ export default async function handler(req, res) {
 
         payload.stock_limited = stockLimited;
 
-        // ✅ 关键改动：强制写入，不判断是否存在
+        // ✅ 强制写入，不判断是否已存在
         await db.collection('triggered_comments').doc(docId).set(payload);
         added++;
       }
