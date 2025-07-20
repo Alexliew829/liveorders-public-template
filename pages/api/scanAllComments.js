@@ -102,8 +102,6 @@ export default async function handler(req, res) {
         }
       } else {
         const docId = `${selling_id}_${comment_id}`;
-        const existing = await db.collection('triggered_comments').doc(docId).get();
-        if (existing.exists) { skipped++; continue; }
 
         const stock = product.stock || 0;
         let stockLimited = false;
@@ -131,6 +129,8 @@ export default async function handler(req, res) {
         }
 
         payload.stock_limited = stockLimited;
+
+        // ✅ 关键改动：强制写入，不判断是否存在
         await db.collection('triggered_comments').doc(docId).set(payload);
         added++;
       }
