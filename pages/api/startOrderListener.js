@@ -89,6 +89,11 @@ export default async function handler(req, res) {
         post_id,
         success: 0,
         skipped: comments.length,
+        debug_samples: comments.slice(0, 10).map(c => ({
+          id: c.id,
+          from: c.from?.name || '(匿名)',
+          message: c.message
+        }))
       });
     }
 
