@@ -12,7 +12,7 @@ const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
 // ✅ 标准化编号，例如 a 32 → A032
 function normalizeSellingId(raw) {
-  const match = raw.match(/([aAbB])[ \-_.~〜]*0*(\d{1,3})/);
+ const match = raw.match(/\b([aAbB])[ \-_.~〜]*0*(\d{1,3})\b/);
   if (!match) return null;
   const letter = match[1].toUpperCase();
   const number = match[2].padStart(3, '0');
