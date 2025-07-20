@@ -7,11 +7,14 @@ const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
+// ✅ 标准化编号，例如 a-1 → A001
 function normalizeSellingId(raw) {
   const match = raw.match(/\b([aAbB])[ \-_.~〜]*0*(\d{1,3})\b/);
   if (!match) return null;
   return `${match[1].toUpperCase()}${match[2].padStart(3, '0')}`;
 }
+
+// ✅ 提取数量（+2、x3、×4 等）
 function extractQuantity(msg) {
   let qty = 1;
   const matches = msg.match(/(?:[+xX*\u00D7\uFF0D\-\u2013])\s*(\d{1,3})/gi);
@@ -21,19 +24,29 @@ function extractQuantity(msg) {
   }
   return qty;
 }
+
+// ✅ 分页抓取留言（最多抓 20 页）
 async function fetchAllComments(postId) {
   const all = [];
   let next = `https://graph.facebook.com/${postId}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`;
-  while (next) {
+  let pageCount = 0;
+  const MAX_PAGES = 20;
+
+  while (next && pageCount < MAX_PAGES) {
+    console.log(`📄 正在抓取第 ${pageCount + 1} 页留言...`);
     const res = await fetch(next);
     const json = await res.json();
     if (!json?.data?.length) break;
     all.push(...json.data);
     next = json.paging?.next || null;
+    pageCount++;
   }
+
+  console.log(`✅ 抓取完成，共 ${all.length} 条留言，页数：${pageCount}`);
   return all;
 }
 
+// ✅ 主接口逻辑
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: '只允许 POST 请求' });
 
