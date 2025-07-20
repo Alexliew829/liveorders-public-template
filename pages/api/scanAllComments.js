@@ -5,21 +5,20 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
 if (!getApps().length) {
   initializeApp({ credential: cert(serviceAccount) });
 }
-
 const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 const PAGE_TOKEN = process.env.FB_ACCESS_TOKEN;
 
-// ✅ 标准化编号，例如 a 32 → A032
+// ✅ 标准化编号，例如 A32 → A032
 function normalizeSellingId(raw) {
- const match = raw.match(/\b([aAbB])[ \-_.~〜]*0*(\d{1,3})\b/);
+  const match = raw.match(/\b([aAbB])[ \-_.~〜]*0*(\d{1,3})\b/);
   if (!match) return null;
   const letter = match[1].toUpperCase();
   const number = match[2].padStart(3, '0');
   return `${letter}${number}`;
 }
 
-// ✅ 提取数量（支持 +2, x3, ×4, *5, -6 等格式）
+// ✅ 提取数量（支持 +2, x3, ×4, *5, -6 等）
 function extractQuantity(message) {
   let qty = 1;
   const matches = message.match(/(?:[+xX*\u00D7\uFF0D\-\u2013])\s*(\d{1,3})/gi);
@@ -30,20 +29,20 @@ function extractQuantity(message) {
   return qty;
 }
 
-// ✅ 分页抓取所有留言
+// ✅ 分页抓留言
 async function fetchAllComments(postId) {
-  const allComments = [];
+  const all = [];
   let next = `https://graph.facebook.com/${postId}/comments?access_token=${PAGE_TOKEN}&filter=stream&limit=100`;
 
   while (next) {
     const res = await fetch(next);
     const json = await res.json();
     if (!json?.data?.length) break;
-    allComments.push(...json.data);
+    all.push(...json.data);
     next = json.paging?.next || null;
   }
 
-  return allComments;
+  return all;
 }
 
 export default async function handler(req, res) {
@@ -54,14 +53,14 @@ export default async function handler(req, res) {
     if (!configSnap.exists) return res.status(400).json({ error: '未设定直播贴文 ID' });
 
     const post_id = configSnap.data().post_id;
+
     const comments = await fetchAllComments(post_id);
+    console.log('抓到留言', comments.length);
+    if (!comments.length) return res.status(200).json({ message: '⚠️ 没有抓到任何留言，请确认贴文或权限。', added: 0 });
 
-    console.log(`✅ 共抓取留言数：${comments.length}`);
-
-    // ✅ 删除旧 triggered_comments
+    // ✅ 清空旧留言
     const oldDocs = await db.collection('triggered_comments').listDocuments();
-    const deletePromises = oldDocs.map(doc => doc.delete());
-    await Promise.all(deletePromises);
+    await Promise.all(oldDocs.map(doc => doc.delete()));
 
     let added = 0, skipped = 0, ignored = 0;
 
@@ -77,15 +76,13 @@ export default async function handler(req, res) {
       const user_id = from.id;
       const user_name = from.name || `访客_${comment_id.slice(-4)}`;
 
-      const productRef = db.collection('live_products').doc(selling_id);
-      const productSnap = await productRef.get();
+      const productSnap = await db.collection('live_products').doc(selling_id).get();
       if (!productSnap.exists) { skipped++; continue; }
       const product = productSnap.data();
 
-      const rawPrice = product.price;
-      const cleanPrice = typeof rawPrice === 'string'
-        ? parseFloat(rawPrice.replace(/,/g, '').replace(/[^0-9.]/g, '')) || 0
-        : parseFloat(rawPrice) || 0;
+      const cleanPrice = typeof product.price === 'string'
+        ? parseFloat(product.price.replace(/,/g, ''))
+        : product.price || 0;
 
       const payload = {
         post_id,
@@ -109,15 +106,10 @@ export default async function handler(req, res) {
         let stockLimited = false;
 
         if (stock > 0) {
-          const querySnap = await db.collection('triggered_comments')
-            .where('selling_id', '==', selling_id)
-            .get();
-
+          const snap = await db.collection('triggered_comments')
+            .where('selling_id', '==', selling_id).get();
           let totalOrdered = 0;
-          querySnap.forEach(doc => {
-            const data = doc.data();
-            totalOrdered += parseInt(data.quantity) || 0;
-          });
+          snap.forEach(doc => totalOrdered += parseInt(doc.data().quantity) || 0);
 
           if (totalOrdered >= stock) { skipped++; continue; }
           else if (totalOrdered + quantity > stock) {
@@ -144,7 +136,7 @@ export default async function handler(req, res) {
       total: comments.length
     });
   } catch (err) {
-    console.error('❌ 扫描留言失败:', err);
-    return res.status(500).json({ error: '系统错误，请稍后再试', details: err.message });
+    console.error('留言补抓失败', err.message);
+    return res.status(500).json({ error: '留言补抓失败', details: err.message });
   }
 }
