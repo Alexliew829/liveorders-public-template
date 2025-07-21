@@ -64,17 +64,34 @@ export default async function handler(req, res) {
     for (const c of comments) {
       const { id: comment_id, message, from } = c;
       if (!message || !from || from.id === PAGE_ID) {
-        ignored++; log.push({ comment_id, reason: '主页留言或无 from' }); continue;
+        ignored++;
+        log.push({ comment_id, reason: '主页留言或无 from' });
+        continue;
       }
 
       const selling_id = normalizeSellingId(message);
       if (!selling_id) {
-        skipped++; log.push({ comment_id, user: from.name, reason: '无法识别编号' }); continue;
+        skipped++;
+        log.push({ comment_id, user: from.name, reason: '无法识别编号' });
+        continue;
       }
 
       const productSnap = await db.collection('live_products').doc(selling_id).get();
       if (!productSnap.exists) {
-        skipped++; log.push({ comment_id, user: from.name, id: selling_id, reason: '找不到商品' }); continue;
+        // ✅ 新增：将留言暂存到 pending_comments 表
+        await db.collection('pending_comments').doc(comment_id).set({
+          post_id,
+          comment_id,
+          message,
+          user_id: from.id,
+          user_name: from.name || `访客_${comment_id.slice(-4)}`,
+          created_at: Date.now(),
+          selling_id,
+          reason: '商品尚未建立，留言暂存'
+        });
+        skipped++;
+        log.push({ comment_id, user: from.name, id: selling_id, reason: '商品未建，留言已暂存' });
+        continue;
       }
 
       const prefix = selling_id[0];
@@ -102,7 +119,8 @@ export default async function handler(req, res) {
         // B 类商品，只记录第一位留言者
         payload.quantity = 1;
         await db.collection('triggered_comments').doc(selling_id).set(payload);
-        added++; log.push({ comment_id, user: user_name, id: selling_id, quantity: 1 });
+        added++;
+        log.push({ comment_id, user: user_name, id: selling_id, quantity: 1 });
       } else {
         // A 类商品，允许多人下单，判断库存
         const docId = `${selling_id}_${comment_id}`;
@@ -114,13 +132,16 @@ export default async function handler(req, res) {
           let ordered = 0;
           snap.forEach(doc => ordered += parseInt(doc.data().quantity) || 0);
           if (ordered >= stock) {
-            skipped++; log.push({ comment_id, user: user_name, id: selling_id, reason: `超出库存（已下单${ordered}）` }); continue;
+            skipped++;
+            log.push({ comment_id, user: user_name, id: selling_id, reason: `超出库存（已下单${ordered}）` });
+            continue;
           }
           if (ordered + q > stock) q = stock - ordered;
         }
 
         await db.collection('triggered_comments').doc(docId).set({ ...payload, quantity: q });
-        added++; log.push({ comment_id, user: user_name, id: selling_id, quantity: q });
+        added++;
+        log.push({ comment_id, user: user_name, id: selling_id, quantity: q });
       }
     }
 
