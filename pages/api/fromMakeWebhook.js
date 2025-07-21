@@ -9,12 +9,12 @@ if (!getApps().length) {
 const db = getFirestore();
 const PAGE_ID = process.env.PAGE_ID;
 
-// ✅ 标准化编号，例如 a 32 → A032
+// ✅ 更安全的编号标准化
 function normalizeSellingId(raw) {
-  const match = raw.match(/[a-zA-Z]\s*[-_~.～]*\s*0*(\d{1,3})/);
-  if (!match) return raw.trim().toUpperCase();
-  const letter = raw.match(/[a-zA-Z]/)[0].toUpperCase();
-  const num = match[1].padStart(3, '0');
+  const match = raw.match(/([aAbB])[\s\-_.=~～]*0*(\d{1,3})/);
+  if (!match) return null;
+  const letter = match[1].toUpperCase();
+  const num = match[2].padStart(3, '0');
   return `${letter}${num}`;
 }
 
@@ -54,12 +54,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: '已忽略主页留言' });
     }
 
-    const match = message.match(/\b([aAbB])[\s\-_.～]*0*(\d{1,3})\b/);
+    const match = message.match(/([aAbB])[\s\-_.=~～]*0*(\d{1,3})/);
     if (!match) {
       return res.status(200).json({ message: '无有效商品编号，跳过处理' });
     }
 
     const selling_id = normalizeSellingId(`${match[1]}${match[2]}`);
+    if (!selling_id) {
+      return res.status(200).json({ message: '无法标准化编号，跳过处理' });
+    }
+
     const prefix = selling_id[0];
     let quantity = extractQuantity(message);
 
@@ -145,6 +149,6 @@ export default async function handler(req, res) {
       });
     }
   } catch (err) {
-    return res.status(500).json({ error: '❌ 系统错误，写入失败', details: err.message });
+    return res.status(500).json({ error: '❌ 系统错误，写入失败', details: err.message?.toString() || '' });
   }
 }
