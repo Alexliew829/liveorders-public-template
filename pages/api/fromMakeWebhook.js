@@ -70,7 +70,18 @@ export default async function handler(req, res) {
     const productRef = db.collection('live_products').doc(selling_id);
     const productSnap = await productRef.get();
     if (!productSnap.exists) {
-      return res.status(200).json({ message: `编号 ${selling_id} 不存在于商品列表中，跳过处理` });
+      // ✅ 商品尚未建立 → 留言暂存
+      await db.collection('pending_comments').doc(comment_id).set({
+        post_id,
+        comment_id,
+        message,
+        user_id: user_id || '',
+        user_name: user_name || `访客_${comment_id.slice(-4)}`,
+        created_at: Date.now(),
+        selling_id,
+        reason: '商品尚未建立，留言暂存'
+      });
+      return res.status(200).json({ message: `📌 编号 ${selling_id} 尚未建立商品资料，留言已暂存` });
     }
 
     const product = productSnap.data();
